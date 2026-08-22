@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "exported_at": "2026-08-22T09:14:00Z",
+  "event": {
+    "name": "Winter Quiz",
+    "date": "2026-09-12",
+    "theme": {
+      "layout": "standard",
+      "colour": { "bg": "#1A1D24", "bg2": "#2A2F3A", "accent": "#E0A82E" },
+      "chrome": {
+        "title": "Winter Quiz",
+        "subtitle": "Three rounds, one winner",
+        "logo_light": "logo-light.png",
+        "logo_dark": "logo-dark.png",
+        "footer": "Proudly supported by The Anchor · #winterquiz"
+      }
+    },
+    "settings": {
+      "poll_interval_ms": 3000,
+      "timer_enabled": false,
+      "leaderboard_cadence": "every_round"
+    }
+  },
+
+  "rounds": [
+    { "number": 1, "theme": {} },
+    {
+      "number": 2,
+      "theme": {
+        "layout": "media",
+        "colour": { "bg": "#2A1A3E", "bg2": "#160E24" }
+      }
+    },
+    { "number": 3, "theme": {} }
+  ],
+
+  "questions": [
+    {
+      "round": 1, "order_no": 1, "type": "mcq", "points": 1,
+      "prompt": "Which Australian city hosted the 2000 Olympics?",
+      "options": ["Melbourne", "Sydney", "Brisbane", "Perth"],
+      "correct_answer": "Sydney",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 1, "order_no": 2, "type": "text", "points": 2,
+      "prompt": "Who wrote Great Expectations?",
+      "options": null,
+      "correct_answer": "Charles Dickens",
+      "aliases": ["dickens", "c dickens", "charles dickins"],
+      "theme": null
+    },
+    {
+      "round": 1, "order_no": 3, "type": "mcq", "points": 2,
+      "prompt": "Which building is this?",
+      "options": ["Flinders Street", "Opera House", "Parliament House", "MCG"],
+      "correct_answer": "Opera House",
+      "aliases": [],
+      "image": {
+        "file": "a3f9c1e2b7d4.webp",
+        "alt": "A white building with overlapping curved shell roofs, on a harbour at dusk"
+      },
+      "theme": { "layout": "image" }
+    },
+    {
+      "round": 2, "order_no": 4, "type": "text", "points": 2,
+      "prompt": "Name the film this score is from.",
+      "correct_answer": "Jurassic Park",
+      "aliases": ["jurassic park 1", "jp"],
+      "video_url": "https://youtube-nocookie.com/embed/example",
+      "av_cue": "AV cue 04 — audio clip, 0:32",
+      "theme": null
+    },
+    {
+      "round": 3, "order_no": 10, "type": "text", "points": 5,
+      "prompt": "Who is the only person to win an Oscar, an Emmy, a Grammy, a Tony and a Nobel Prize?",
+      "correct_answer": "Bob Dylan",
+      "aliases": ["dylan", "robert zimmerman"],
+      "theme": { "layout": "statement", "colour": { "accent": "#4ADE80" } }
+    },
+    {
+      "is_practice": true, "type": "mcq", "points": 0,
+      "prompt": "Which planet is closest to the sun?",
+      "options": ["Mercury", "Venus", "Earth", "Mars"],
+      "correct_answer": "Mercury"
+    },
+    {
+      "is_reserve": true, "type": "text", "points": 1,
+      "prompt": "In what year was the Sydney Harbour Bridge opened?",
+      "correct_answer": "1932",
+      "aliases": []
+    }
+  ],
+
+  "tables": [
+    { "table_number": "1",   "seats": 8,  "colour": { "type": "block",    "from": "#C2410C" } },
+    { "table_number": "2",   "seats": 8,  "colour": { "type": "gradient", "from": "#1D4ED8", "to": "#1E3A8A", "angle": 135 } },
+    { "table_number": "3",   "seats": 10, "colour": { "type": "block",    "from": "#15803D" } },
+    { "table_number": "12A", "seats": 6,  "colour": null }
+  ],
+
+  "media_manifest": [
+    { "file": "a3f9c1e2b7d4.webp", "original_name": "opera-house.jpg", "bytes": 88104, "width": 1200 },
+    { "file": "logo-light.png",    "original_name": "logo-light.png",  "bytes": 12488, "width": 480 },
+    { "file": "logo-dark.png",     "original_name": "logo-dark.png",   "bytes": 12902, "width": 480 }
+  ],
+
+  "_notes": {
+    "never_exported": [
+      "answers", "marks", "bonuses", "players", "team names",
+      "table tokens", "screen token", "passphrase", "PINs", "audit log"
+    ],
+    "on_import": [
+      "Creates a NEW event. Never overwrites an existing one.",
+      "Tokens, screen token, passphrase and PINs are always regenerated.",
+      "Media files are referenced by name — upload the media folder alongside.",
+      "Validated against schema_version before anything is written.",
+      "Blocked once an event has started."
+    ]
+  }
+}
