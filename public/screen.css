@@ -49,6 +49,16 @@ body {
 .screen-spread-count { font-size: 1.25rem; color: var(--text-muted); margin-top: 8px; }
 
 .screen-leaderboard { text-align: left; max-width: 800px; margin: 0 auto; }
+
+.screen-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  vertical-align: -5px;
+  margin-right: 12px;
+}
 .screen-leaderboard-row {
   display: flex;
   justify-content: space-between;
@@ -58,3 +68,33 @@ body {
 }
 
 .screen-answered { font-size: 1.25rem; color: var(--text-muted); margin-top: 16px; }
+
+/* Chrome: logo top corner inside the 5% safe margin, footer band full-width
+   at the bottom. Set once at event level, never cascading (CLAUDE.md #20).
+   The footer reduces the content area (body's padding-bottom, set in JS)
+   rather than overlapping it. */
+.screen-logo {
+  position: fixed;
+  top: 5%;
+  right: 5%;
+  height: 5vw;
+  max-height: 64px;
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 6px 10px;
+}
+
+.screen-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 64px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  padding: 0 5%;
+  font-size: 1.1rem;
+}

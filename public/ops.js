@@ -11,6 +11,15 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  // Team colour is an identifier, not a theme (CLAUDE.md #18) — used here as
+  // a border accent only, never as the grid button's fill or text colour.
+  function colourCss(colour) {
+    if (!colour) return null;
+    return colour.type === 'gradient'
+      ? `linear-gradient(135deg, ${colour.from}, ${colour.to})`
+      : colour.from;
+  }
+
   function renderRolePicker() {
     clear(app);
     const heading = document.createElement('h1');
@@ -113,6 +122,12 @@
     app.appendChild(answered);
     hostEls.answered = answered;
 
+    const avCue = document.createElement('p');
+    avCue.className = 'error';
+    avCue.style.display = 'none';
+    app.appendChild(avCue);
+    hostEls.avCue = avCue;
+
     buildPauseControl();
 
     const list = document.createElement('div');
@@ -162,6 +177,15 @@
         (state.answered.outstanding.length ? ` — outstanding: ${state.answered.outstanding.join(', ')}` : '')
       : '';
 
+    // AV runs outside this app — cue card only, a human presses play on the
+    // venue laptop (CLAUDE.md/scope: "Console displays a cue card; a human
+    // presses play"). Phones show a neutral "listen up" screen until Open.
+    const cuePending = state.current && state.current.state === 'PENDING' && state.current.av_cue;
+    hostEls.avCue.style.display = cuePending ? '' : 'none';
+    hostEls.avCue.textContent = cuePending
+      ? `${state.current.av_cue} — play from the venue laptop, not sent to phones. Open the question once it finishes.`
+      : '';
+
     clear(hostEls.list);
     state.questions.forEach((qu) => {
       const row = document.createElement('div');
@@ -174,9 +198,10 @@
       const isCurrent = state.current && state.current.id === qu.id;
       const currentState = isCurrent ? state.current.state : null;
 
+      const openLabel = isCurrent && state.current.av_cue ? 'Open after clip' : 'Open';
       const actions = [
         { state: 'PENDING', label: 'Show', enabled: !isCurrent },
-        { state: 'OPEN', label: 'Open', enabled: isCurrent && currentState === 'PENDING' },
+        { state: 'OPEN', label: openLabel, enabled: isCurrent && currentState === 'PENDING' },
         { state: 'CLOSED', label: 'Close', enabled: isCurrent && currentState === 'OPEN' },
         { state: 'REVEALED', label: 'Reveal', enabled: isCurrent && currentState === 'CLOSED' },
         { state: 'OPEN', label: 'Reopen', enabled: isCurrent && (currentState === 'CLOSED' || currentState === 'REVEALED') }
@@ -217,11 +242,33 @@
 
   // --- pause: a flag on the event, not a state (CLAUDE.md #17) -----------
 
+  // Presets from the host-console mockup — food service, a speech, marking
+  // catching up, a technical issue, or type your own.
+  const PAUSE_PRESETS = [
+    ['Food service', 'Back shortly — mains are coming out.'],
+    ['Speech', 'One moment for a speech.'],
+    ['Marking catching up', 'A short pause while marking catches up.'],
+    ['Technical issue', 'Back shortly — technical issue.']
+  ];
+
   function buildPauseControl() {
     const reasonInput = document.createElement('input');
     reasonInput.placeholder = 'Reason (e.g. food service)';
     const messageInput = document.createElement('input');
     messageInput.placeholder = 'Message shown to the room';
+
+    const presetsRow = document.createElement('div');
+    PAUSE_PRESETS.forEach(([reason, message]) => {
+      const presetBtn = document.createElement('button');
+      presetBtn.type = 'button';
+      presetBtn.textContent = reason;
+      presetBtn.addEventListener('click', () => {
+        reasonInput.value = reason;
+        messageInput.value = message;
+      });
+      presetsRow.appendChild(presetBtn);
+    });
+
     const pauseBtn = document.createElement('button');
     pauseBtn.type = 'button';
     pauseBtn.textContent = 'Pause';
@@ -249,7 +296,7 @@
       await refreshHost();
     });
 
-    app.append(reasonInput, messageInput, pauseBtn, resumeBtn);
+    app.append(presetsRow, reasonInput, messageInput, pauseBtn, resumeBtn);
   }
 
   // --- table support: bonus + answer on a table's behalf ------------------
@@ -286,37 +333,74 @@
       await refreshHost();
     });
 
-    const pointsInput = document.createElement('input');
-    pointsInput.placeholder = 'Bonus points';
-    pointsInput.inputMode = 'numeric';
+    // Bonus: tap a table, tap an amount, award. Two taps, or it won't get
+    // used during a live night (host-console mockup note).
+    const bonusHeading = document.createElement('p');
+    bonusHeading.textContent = 'Award a bonus — tap a table';
+    const bonusGrid = document.createElement('div');
+    bonusGrid.className = 'question-list';
+    let selectedTeamId = null;
+
+    async function refreshBonusGrid() {
+      const res = await fetch('/host/scores', { cache: 'no-store' });
+      const data = await res.json();
+      clear(bonusGrid);
+      data.scores.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = `${s.table_number}`;
+        if (s.colour) { btn.style.borderLeftWidth = '6px'; btn.style.borderLeftColor = s.colour.from; }
+        if (s.team_id === selectedTeamId) btn.classList.add('selected');
+        btn.addEventListener('click', () => { selectedTeamId = s.team_id; refreshBonusGrid(); });
+        bonusGrid.appendChild(btn);
+      });
+    }
+    refreshBonusGrid();
+
+    let pointsValue = 1;
+    const pointsRow = document.createElement('div');
+    [1, 2, 3].forEach((n) => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.textContent = `+${n}`;
+      pill.addEventListener('click', () => { pointsValue = n; customPoints.value = ''; });
+      pointsRow.appendChild(pill);
+    });
+    const customPoints = document.createElement('input');
+    customPoints.placeholder = 'Custom amount';
+    customPoints.inputMode = 'numeric';
+    pointsRow.appendChild(customPoints);
+
     const reasonInput = document.createElement('input');
-    reasonInput.placeholder = 'Reason';
+    reasonInput.placeholder = 'Reason (shown on their phones)';
     const bonusBtn = document.createElement('button');
     bonusBtn.type = 'button';
-    bonusBtn.textContent = 'Award bonus';
+    bonusBtn.textContent = 'Award';
     const bonusMsg = document.createElement('p');
     bonusMsg.className = 'error';
     bonusMsg.setAttribute('role', 'alert');
 
     bonusBtn.addEventListener('click', async () => {
+      if (!selectedTeamId) { bonusMsg.textContent = 'Tap a table first.'; return; }
+      const points = customPoints.value ? Number(customPoints.value) : pointsValue;
       const idempotencyKey = `${Date.now()}-${Math.random()}`;
       const res = await fetch('/host/bonus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          team_id: Number(teamInput.value), points: Number(pointsInput.value),
-          reason: reasonInput.value, idempotency_key: idempotencyKey
-        })
+        body: JSON.stringify({ team_id: selectedTeamId, points, reason: reasonInput.value, idempotency_key: idempotencyKey })
       });
       const data = await res.json();
       bonusMsg.textContent = res.ok ? 'Bonus awarded.' : `Could not award: ${data.error}`;
+      selectedTeamId = null;
+      reasonInput.value = '';
+      await refreshBonusGrid();
       await refreshScores();
     });
 
     app.append(
       teamInput,
       valueInput, answerBtn, answerMsg,
-      pointsInput, reasonInput, bonusBtn, bonusMsg
+      bonusHeading, bonusGrid, pointsRow, reasonInput, bonusBtn, bonusMsg
     );
   }
 
@@ -1169,7 +1253,14 @@
       window.location.href = '/admin/backup/database';
     });
 
-    app.appendChild(btn);
+    const resultsBtn = document.createElement('button');
+    resultsBtn.type = 'button';
+    resultsBtn.textContent = 'Export results (CSV)';
+    resultsBtn.addEventListener('click', () => {
+      window.location.href = '/admin/results/export';
+    });
+
+    app.append(btn, resultsBtn);
   }
 
   // --- floor console -------------------------------------------------
@@ -1239,6 +1330,10 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = `${t.table_number}${status !== 'ok' ? ` (${status})` : ''}`;
+      if (t.colour) {
+        btn.style.borderLeftWidth = '6px';
+        btn.style.borderLeftColor = t.colour.from;
+      }
       btn.addEventListener('click', () => openFloorTable(t.team_id));
       floorEls.grid.appendChild(btn);
     });

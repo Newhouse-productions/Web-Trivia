@@ -1,7 +1,7 @@
 // Prepared statements and payload builders shared by the player and ops
 // route modules. Payloads are built by naming fields to include, never by
 // deleting sensitive ones (CLAUDE.md #1).
-import { resolveTheme } from './theme.js';
+import { resolveTheme, isDark } from './theme.js';
 
 export function buildQueries(db) {
   const getEventById = db.prepare('SELECT * FROM events WHERE id = ?');
@@ -57,6 +57,22 @@ export function buildQueries(db) {
     return resolveTheme({ eventTheme, roundTheme, questionTheme });
   }
 
+  // Chrome is set once at event level and never cascades (CLAUDE.md #20) —
+  // logo and footer, picked by the resolved background's luminance since a
+  // single logo file won't survive both a light and a dark theme.
+  function resolveChrome(event, resolvedColour) {
+    if (!event.chrome) return null;
+    const chrome = JSON.parse(event.chrome);
+    const wantDark = resolvedColour ? isDark(resolvedColour.bg) : true;
+    const logoFile = (wantDark ? chrome.logo_dark : chrome.logo_light) || chrome.logo_dark || chrome.logo_light;
+    return {
+      title: chrome.title || null,
+      subtitle: chrome.subtitle || null,
+      footer: chrome.footer || null,
+      logo: logoFile ? resolveMediaUrl(event.id, logoFile) : null
+    };
+  }
+
   function resolveMediaUrl(eventId, filename) {
     if (!filename) return null;
     const row = getMediaHash.get(eventId, filename);
@@ -103,6 +119,15 @@ export function buildQueries(db) {
   }
 
   function playerQuestionPayload(row) {
+    // PENDING is a holding screen, not the question (technical-design §2.1's
+    // state table: "Holding screen, or 'listen up' if AV cue" / big screen
+    // "Round card or AV") — prompt, options and image are never sent before
+    // the host actually opens it, same allowlist discipline as the
+    // correct-answer gate below (CLAUDE.md #1).
+    if (row.question_status === 'PENDING') {
+      return { id: row.question_id, state: row.question_status, type: row.type, points: row.points };
+    }
+
     const payload = {
       id: row.question_id,
       state: row.question_status,
@@ -157,7 +182,7 @@ export function buildQueries(db) {
     insertPlayer, assignCaptainIfEmpty, setCaptainCas, bumpTableVersion, bumpEventVersion, touchLastSeen,
     getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
-    getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme,
+    getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme, resolveChrome,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }

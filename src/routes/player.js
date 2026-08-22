@@ -128,6 +128,7 @@ export function registerPlayerRoutes(app, { db, q }) {
       team: {
         table_number: team.table_number,
         team_name: team.team_name,
+        colour: team.colour ? JSON.parse(team.colour) : null,
         score: q.teamScore(team.id),
         is_captain: team.captain_player_id === player.id,
         captain_player_id: team.captain_player_id,

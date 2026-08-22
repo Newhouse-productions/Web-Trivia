@@ -74,7 +74,7 @@ export function registerOpsRoutes(app, { db, q }) {
   // countback, excluding bonuses deliberately (technical-design §12.1):
   // round 3, then round 2, then free-text questions answered correctly.
   const getScores = db.prepare(`
-    SELECT t.id AS team_id, t.table_number, t.team_name,
+    SELECT t.id AS team_id, t.table_number, t.team_name, t.colour,
            COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
            COALESCE((SELECT SUM(points) FROM bonuses b WHERE b.team_id = t.id), 0) AS bonus_points,
            COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 AND q.round = 3 THEN q.points ELSE 0 END), 0) AS round3_points,
@@ -353,6 +353,7 @@ export function registerOpsRoutes(app, { db, q }) {
     const scores = getScores.all(event.id).map((r) => ({
       team_id: r.team_id, table_number: r.table_number,
       team_name: r.team_name || `Table ${r.table_number}`,
+      colour: r.colour ? JSON.parse(r.colour) : null,
       score: r.answer_points + r.bonus_points
     }));
 
@@ -382,6 +383,7 @@ export function registerOpsRoutes(app, { db, q }) {
       team_id: r.team_id,
       table_number: r.table_number,
       team_name: r.team_name || `Table ${r.table_number}`,
+      colour: r.colour ? JSON.parse(r.colour) : null,
       score: r.answer_points + r.bonus_points
     }));
 

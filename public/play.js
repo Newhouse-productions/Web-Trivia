@@ -11,6 +11,30 @@
   let playEls = null;
   let latestPlayState = null;
 
+  // Team colour is an identifier, not a theme (CLAUDE.md #18) — header band
+  // and small markers only, never the content area. The table number
+  // always appears alongside it in plain text; colour is never the sole
+  // identifier.
+  function colourCss(colour) {
+    if (!colour) return null;
+    return colour.type === 'gradient'
+      ? `linear-gradient(135deg, ${colour.from}, ${colour.to})`
+      : colour.from;
+  }
+
+  function luminance(hex) {
+    const n = parseInt(String(hex).replace('#', ''), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+
+  function bestTextOn(hex) {
+    return luminance(hex) < 0.4 ? '#ffffff' : '#111111';
+  }
+
   function announce(msg) {
     announcer.textContent = msg;
   }
@@ -122,6 +146,16 @@
     state.leaderboard.forEach((row, i) => {
       const line = document.createElement('div');
       line.className = 'option' + (state.our_place === i + 1 ? ' selected' : '');
+      // Swatch beside the row, never a row background or text colour
+      // (CLAUDE.md #18, technical-design §20.4) — every other row's
+      // contrast against it would become a separate problem otherwise.
+      const swatchCss = colourCss(row.colour);
+      if (swatchCss) {
+        const swatch = document.createElement('span');
+        swatch.className = 'team-swatch';
+        swatch.style.background = swatchCss;
+        line.appendChild(swatch);
+      }
       const rank = document.createElement('span');
       rank.textContent = `${i + 1}. ${row.team_name}`;
       const score = document.createElement('span');
@@ -378,6 +412,15 @@
         ? ' — you are answering'
         : team.captain_name ? ` — ${team.captain_name} is answering` : ' — no captain yet');
 
+    const bandCss = colourCss(team.colour);
+    if (bandCss) {
+      playEls.teamLine.style.background = bandCss;
+      playEls.teamLine.style.color = bestTextOn(team.colour.from);
+    } else {
+      playEls.teamLine.style.background = '';
+      playEls.teamLine.style.color = '';
+    }
+
     playEls.takeoverBtn.style.display = team.is_captain ? 'none' : '';
 
     if (!state.question) {
@@ -387,6 +430,20 @@
       clear(playEls.optionsWrap);
       playEls.textWrap.style.display = 'none';
       playEls.note.textContent = '';
+      playEls.lastQuestionId = null;
+      return;
+    }
+
+    // PENDING is a holding screen — the server withholds the prompt
+    // entirely until the host opens it (CLAUDE.md #1), so there is nothing
+    // to render here but "coming up."
+    if (state.question.state === 'PENDING') {
+      playEls.prompt.textContent = 'Question coming up…';
+      playEls.image.style.display = 'none';
+      clear(playEls.videoWrap);
+      clear(playEls.optionsWrap);
+      playEls.textWrap.style.display = 'none';
+      playEls.note.textContent = 'Eyes on the screen.';
       playEls.lastQuestionId = null;
       return;
     }

@@ -36,7 +36,7 @@ function mix(a, b, t) {
   return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
 
-const isDark = (hex) => luminance(hex) < 0.35;
+export const isDark = (hex) => luminance(hex) < 0.35;
 
 // Sensible values derived from bg + accent when a preset doesn't specify
 // them (CLAUDE.md #19) — real tokens with real fallbacks, not guesses made

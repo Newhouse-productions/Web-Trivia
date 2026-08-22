@@ -84,19 +84,26 @@ export function registerScreenRoutes(app, { db, q }) {
     if (es.round_phase === 'PUBLISHED') {
       const round = getPublishedRound.get(event.id);
       if (round) {
+        const boardTheme = q.resolveCurrentTheme(event, null);
         return {
           stage: 'leaderboard',
           version: event.version,
           event_name: event.name,
           round: round.number,
-          leaderboard: JSON.parse(round.published_leaderboard)
+          theme: boardTheme,
+          leaderboard: JSON.parse(round.published_leaderboard),
+          chrome: q.resolveChrome(event, boardTheme.colour)
         };
       }
     }
 
     const current = es.current_question_id ? q.getCurrentQuestion.get(event.id) : null;
     if (!current) {
-      return { stage: 'holding', version: event.version, event_name: event.name };
+      const holdingTheme = q.resolveCurrentTheme(event, null);
+      return {
+        stage: 'holding', version: event.version, event_name: event.name,
+        theme: holdingTheme, chrome: q.resolveChrome(event, holdingTheme.colour)
+      };
     }
 
     const payload = q.playerQuestionPayload(current);
@@ -109,12 +116,14 @@ export function registerScreenRoutes(app, { db, q }) {
       }
     }
 
+    const theme = q.resolveCurrentTheme(event, current);
     return {
       stage: 'question',
       version: event.version,
       event_name: event.name,
       round: current.round,
-      theme: q.resolveCurrentTheme(event, current),
+      theme,
+      chrome: q.resolveChrome(event, theme.colour),
       question: payload,
       answered: { count: answeredTotal, total: teamTotal }
     };

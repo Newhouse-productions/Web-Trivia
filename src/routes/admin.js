@@ -474,14 +474,21 @@ export function registerAdminRoutes(app, { db, q }) {
     if (!event) return;
 
     const tables = db.prepare(
-      'SELECT table_number, token FROM teams WHERE event_id = ? AND archived = 0 ORDER BY table_number'
+      'SELECT table_number, token, colour FROM teams WHERE event_id = ? AND archived = 0 ORDER BY table_number'
     ).all(event.id);
 
     const base = baseUrl(req);
     const cards = await Promise.all(tables.map(async (t) => {
       const url = `${base}/t/${t.token}`;
       const svg = await QRCode.toString(url, { type: 'svg', margin: 1, width: 220 });
-      return `<div class="card"><div class="qr">${svg}</div><div class="num">Table ${escapeHtml(t.table_number)}</div></div>`;
+      const colour = t.colour ? JSON.parse(t.colour) : null;
+      // Printed card carries the same identifier swatch as everywhere else
+      // (CLAUDE.md #18) — table number stays in plain text beside it.
+      const swatch = colour
+        ? `<div class="swatch" style="background:${colour.type === 'gradient'
+            ? `linear-gradient(135deg, ${colour.from}, ${colour.to})` : colour.from}"></div>`
+        : '';
+      return `<div class="card">${swatch}<div class="qr">${svg}</div><div class="num">Table ${escapeHtml(t.table_number)}</div></div>`;
     }));
 
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -489,9 +496,10 @@ export function registerAdminRoutes(app, { db, q }) {
 <style>
   body { font-family: system-ui, sans-serif; margin: 24px; }
   .sheet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-  .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; text-align: center; page-break-inside: avoid; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; text-align: center; page-break-inside: avoid; position: relative; }
   .qr svg { width: 100%; height: auto; }
   .num { font-size: 22px; font-weight: 700; margin-top: 8px; }
+  .swatch { width: 100%; height: 10px; border-radius: 4px; margin-bottom: 10px; }
   @media print { .card { border: 1px solid #999; } }
 </style>
 </head><body>
@@ -600,6 +608,67 @@ export function registerAdminRoutes(app, { db, q }) {
       action: 'setTheme', target: `question:${question.id}`, reason: JSON.stringify(theme)
     });
     return { ok: true };
+  });
+
+  // --- results export: per-table, per-question CSV (host mockup "Export
+  // results"). Team names and scores only, no usernames — same rule as the
+  // retention export (CLAUDE.md/scope §6 data retention).
+
+  function csvField(v) {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  // Scores are derived on read, never stored (CLAUDE.md #13) — same logic
+  // as the host's scores query, kept local since admin and host routes
+  // don't otherwise share prepared statements.
+  const getScoresForExport = db.prepare(`
+    SELECT t.table_number, t.team_name,
+           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
+           COALESCE((SELECT SUM(points) FROM bonuses b WHERE b.team_id = t.id), 0) AS bonus_points
+    FROM teams t
+    LEFT JOIN answers a ON a.team_id = t.id
+    LEFT JOIN questions q ON q.id = a.question_id
+    WHERE t.event_id = ? AND t.archived = 0
+    GROUP BY t.id
+    ORDER BY (answer_points + bonus_points) DESC, t.table_number
+  `);
+
+  app.get('/admin/results/export', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+
+    const rows = db.prepare(`
+      SELECT t.table_number, t.team_name, q.round, q.order_no, q.is_practice, q.is_reserve,
+             q.prompt, q.type, q.points, a.value, a.is_correct
+      FROM answers a
+      JOIN teams t ON t.id = a.team_id
+      JOIN questions q ON q.id = a.question_id
+      WHERE a.event_id = ?
+      ORDER BY t.table_number, q.round, q.order_no
+    `).all(event.id);
+
+    const header = ['table_number', 'team_name', 'round', 'order_no', 'prompt', 'type', 'points', 'value', 'is_correct', 'points_earned'];
+    const lines = [header.join(',')];
+    for (const r of rows) {
+      const label = r.is_practice ? 'practice' : r.is_reserve ? 'reserve' : String(r.order_no ?? '');
+      const pointsEarned = r.is_correct === 1 ? r.points : 0;
+      lines.push([
+        r.table_number, r.team_name || `Table ${r.table_number}`, r.round ?? '', label, r.prompt,
+        r.type, r.points, r.value, r.is_correct === null ? 'unmarked' : (r.is_correct ? 'correct' : 'wrong'),
+        pointsEarned
+      ].map(csvField).join(','));
+    }
+
+    lines.push('');
+    lines.push('table_number,team_name,final_score');
+    for (const s of getScoresForExport.all(event.id)) {
+      lines.push([s.table_number, s.team_name || `Table ${s.table_number}`, s.answer_points + s.bonus_points]
+        .map(csvField).join(','));
+    }
+
+    reply.header('Content-Disposition', `attachment; filename="results-${event.id}.csv"`);
+    return reply.type('text/csv').send(lines.join('\r\n'));
   });
 
   // --- audit log + database backup (technical-design §9.3, §18) ----------

@@ -89,6 +89,12 @@ button:disabled { opacity: 0.6; cursor: default; }
   font-weight: 700;
 }
 
+button.selected {
+  border-color: var(--accent);
+  background: var(--surface-selected);
+  font-weight: 700;
+}
+
 .option:disabled { opacity: 0.75; cursor: default; }
 
 .error {
@@ -97,7 +103,28 @@ button:disabled { opacity: 0.6; cursor: default; }
   min-height: 1.2em;
 }
 
-.note, .team-line { color: var(--text-muted); }
+.note { color: var(--text-muted); }
+
+/* Team colour band: identifier only, never the content area (CLAUDE.md #18).
+   Hairline border so it reads as distinct against any theme underneath
+   (CLAUDE.md #20.10). */
+.team-line {
+  color: var(--text-muted);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin: 0 0 12px;
+}
+
+.team-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  vertical-align: -2px;
+  margin-right: 8px;
+}
 
 .result { font-weight: 600; }
 

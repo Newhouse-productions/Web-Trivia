@@ -8,7 +8,7 @@ import { makeAuditLogger } from '../audit.js';
 export function registerFloorRoutes(app, { db, q }) {
   const logAudit = makeAuditLogger(db);
   const getTeamsWithStatus = db.prepare(`
-    SELECT t.id AS team_id, t.table_number, t.team_name, t.captain_player_id, t.last_seen_at,
+    SELECT t.id AS team_id, t.table_number, t.team_name, t.captain_player_id, t.last_seen_at, t.colour,
            (SELECT COUNT(*) FROM players p WHERE p.team_id = t.id) AS player_count,
            (SELECT username FROM players p WHERE p.id = t.captain_player_id) AS captain_name,
            (SELECT COUNT(*) FROM answers a WHERE a.team_id = t.id AND a.question_id = ?) AS answered_current
@@ -44,7 +44,10 @@ export function registerFloorRoutes(app, { db, q }) {
     if (!ctx) return;
     const es = q.getEventState.get(ctx.event.id);
     const currentId = es.current_question_id || 0;
-    return { teams: getTeamsWithStatus.all(currentId, ctx.event.id), question_open: es.question_status === 'OPEN' };
+    const teams = getTeamsWithStatus.all(currentId, ctx.event.id).map((t) => ({
+      ...t, colour: t.colour ? JSON.parse(t.colour) : null
+    }));
+    return { teams, question_open: es.question_status === 'OPEN' };
   });
 
   app.get('/floor/team/:id', async (req, reply) => {

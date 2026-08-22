@@ -9,6 +9,16 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  // Swatch beside the leaderboard row, never a row background or text
+  // colour (technical-design §20.4) — team colour is an identifier, not a
+  // theme (CLAUDE.md #18).
+  function colourCss(colour) {
+    if (!colour) return null;
+    return colour.type === 'gradient'
+      ? `linear-gradient(135deg, ${colour.from}, ${colour.to})`
+      : colour.from;
+  }
+
   // Same resolved theme as the phones, painting both surfaces together for
   // the same question (CLAUDE.md #19).
   function applyTheme(theme) {
@@ -29,8 +39,39 @@
     render(await res.json());
   }
 
+  // Logo top corner, footer band full-width at the bottom — set once at
+  // event level and never cascading (CLAUDE.md #20). The band reduces the
+  // content area rather than overlapping it, so a statement layout's
+  // oversized prompt never runs under it.
+  function renderChrome(chrome) {
+    const existingFooter = document.querySelector('.screen-footer');
+    if (existingFooter) existingFooter.remove();
+    const existingLogo = document.querySelector('.screen-logo');
+    if (existingLogo) existingLogo.remove();
+    document.body.style.paddingBottom = '';
+
+    if (!chrome) return;
+
+    if (chrome.logo) {
+      const logo = document.createElement('img');
+      logo.className = 'screen-logo';
+      logo.src = chrome.logo;
+      logo.alt = '';
+      document.body.appendChild(logo);
+    }
+    if (chrome.footer) {
+      const footer = document.createElement('div');
+      footer.className = 'screen-footer';
+      footer.textContent = chrome.footer;
+      document.body.appendChild(footer);
+      document.body.style.paddingBottom = '80px';
+    }
+  }
+
   function render(state) {
     clear(app);
+    if (state.theme) applyTheme(state.theme);
+    renderChrome(state.chrome);
 
     if (state.stage === 'no_session' || state.stage === 'event_not_running') {
       const p = document.createElement('p');
@@ -65,7 +106,14 @@
         const line = document.createElement('div');
         line.className = 'screen-leaderboard-row';
         const rank = document.createElement('span');
-        rank.textContent = `${i + 1}. ${row.team_name}`;
+        const swatchCss = colourCss(row.colour);
+        if (swatchCss) {
+          const swatch = document.createElement('span');
+          swatch.className = 'screen-swatch';
+          swatch.style.background = swatchCss;
+          rank.appendChild(swatch);
+        }
+        rank.appendChild(document.createTextNode(`${i + 1}. ${row.team_name}`));
         const score = document.createElement('span');
         score.textContent = String(row.score);
         line.append(rank, score);
@@ -76,16 +124,15 @@
     }
 
     if (state.stage === 'question') {
-      applyTheme(state.theme);
       const layout = state.theme ? state.theme.layout : 'standard';
       const q = state.question;
 
-      // Media layout holds the room on a neutral screen while the clip
-      // plays — no prompt shown until the host opens the question.
-      if (layout === 'media' && q.state !== 'OPEN' && q.state !== 'REVEALED') {
+      // PENDING is a round card, not the question — the server withholds
+      // the prompt until the host opens it (CLAUDE.md #1).
+      if (q.state === 'PENDING') {
         const holding = document.createElement('p');
         holding.className = 'screen-prompt';
-        holding.textContent = 'Listen carefully…';
+        holding.textContent = layout === 'media' ? 'Listen carefully…' : `Round ${state.round}`;
         app.appendChild(holding);
         return;
       }
