@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marker & Floor — wireframes</title>
+<style>
+:root{
+  --paper:#E6E9EC;--card:#F7F8F9;--ink:#191C1F;--muted:#8A9299;--fill:#D2D7DB;
+  --line:#B4BBC1;--pin:#2F5FE0;--warn:#B4571F;--ok:#2C6E49;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+header{padding:20px 18px 14px;border-bottom:1px solid var(--line)}
+h1{font-size:15px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:11.5px;margin-top:4px}
+nav,.steps{display:flex;gap:6px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.steps{border-bottom:none;padding-bottom:4px}
+nav button,.step{font-family:var(--mono);font-size:11.5px;padding:6px 11px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:2px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.step[aria-selected="true"]{border-color:var(--ink);color:var(--ink);background:var(--card)}
+nav button:focus-visible,.step:focus-visible{outline:2px solid var(--pin);outline-offset:2px}
+main{padding:14px 18px 60px;display:grid;gap:20px;max-width:1180px;margin:0 auto}
+@media(min-width:900px){main{grid-template-columns:minmax(0,1fr) 300px;align-items:start}}
+.stage{display:flex;justify-content:center}
+.device{background:var(--card);border:1px solid var(--line);position:relative}
+.device.phone{width:100%;max-width:300px;border-radius:22px;padding:11px}
+.device.tablet{width:100%;max-width:560px;border-radius:8px;padding:11px}
+.screen{background:#fff;border:1px solid var(--line);min-height:400px;padding:13px;overflow:hidden}
+.phone .screen{border-radius:13px}
+.notch{width:52px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 9px}
+.tag{position:absolute;top:-9px;left:12px;background:var(--paper);padding:0 6px;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.lbl{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.h{font-family:var(--sans);font-size:15px;font-weight:600;line-height:1.3;margin:0 0 9px;color:#3A4046}
+.p{font-family:var(--sans);font-size:12.5px;color:#6A7278;margin:0 0 9px}
+.rule{height:1px;background:var(--line);margin:12px 0}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:9px}
+.box{border:1px solid var(--line);border-radius:3px;padding:9px 11px;margin-bottom:6px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff}
+.box.dash{border-style:dashed;color:var(--muted)}
+.box.flag{border-left:3px solid var(--warn)}
+.box.good{border-left:3px solid var(--ok)}
+.box.dim{opacity:.5}
+.btn{display:block;width:100%;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:3px;padding:11px;text-align:center;font-family:var(--sans);font-size:12.5px;font-weight:600;margin-bottom:6px}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.warn{background:#fff;color:var(--warn);border-color:var(--warn)}
+.btn.off{background:var(--fill);border-color:var(--fill);color:#fff}
+.btnrow{display:flex;gap:6px;margin-bottom:8px}
+.btnrow>*{flex:1;margin-bottom:0}
+.big2{display:flex;gap:8px;margin-top:8px}
+.big2>div{flex:1;text-align:center;padding:14px 8px;border-radius:4px;font-family:var(--sans);font-size:13px;font-weight:600}
+.yes{border:2px solid var(--ok);color:var(--ok);background:#F2F7F4}
+.no{border:2px solid var(--warn);color:var(--warn);background:#FBF3EE}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:3px 9px;font-size:10px;color:var(--muted);margin:0 3px 3px 0}
+.pill.on{border-color:var(--ink);color:var(--ink);font-weight:600}
+.pill.okp{border-color:var(--ok);color:var(--ok)}
+.pill.warnp{border-color:var(--warn);color:var(--warn)}
+.meta{font-size:10.5px;color:var(--muted);margin-top:8px}
+kbd{font-family:var(--mono);font-size:9.5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:1px 4px;color:var(--muted);background:#FBFBFC;margin-left:5px}
+.grid30{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:8px}
+.cell{aspect-ratio:1;border:1px solid var(--line);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#5C646A;font-family:var(--sans)}
+.cell.ok{background:#EEF3F0;border-color:#A9C6B5}
+.cell.bad{border-color:var(--warn);color:var(--warn);font-weight:700}
+.cell.quiet{opacity:.45}
+.pin{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--pin);color:#fff;font-size:9.5px;font-weight:600;flex:none;margin-right:6px}
+aside{border-top:1px solid var(--line);padding-top:14px}
+@media(min-width:900px){aside{border-top:none;border-left:1px solid var(--line);padding:0 0 0 20px}}
+.aside-h{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+.note{display:flex;margin-bottom:12px;font-size:12px;line-height:1.5;color:#3E454B}
+.ref{color:var(--pin);font-size:10.5px}
+footer{padding:0 18px 40px;max-width:1180px;margin:0 auto;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Marker &amp; Floor — wireframes</h1>
+  <div class="sub">Two roles that had PINs but no screens. Each behind its own PIN at /ops.</div>
+</header>
+
+<nav id="devices" role="tablist"></nav>
+<div class="steps" id="steps"></div>
+
+<main>
+  <div class="stage" id="stage"></div>
+  <aside><div class="aside-h">Notes on this screen</div><div id="notes"></div></aside>
+</main>
+
+<footer>Neither role can change question state. Floor cannot see correct answers at all.</footer>
+
+<script>
+const S = {
+marker: {
+  label:"Marker",
+  frame:"tablet",
+  states:[
+    {
+      label:"1 · Queue",
+      html:`
+        <div class="row"><div class="lbl">Marker · Sam</div><div class="lbl">Round 1 · question 7 live</div></div>
+        <div class="rule"></div>
+        <h2 class="h">2 questions ready</h2>
+        <div class="box good"><div class="row"><span><strong>1.2</strong> Who wrote Great Expectations?</span><span class="pill okp">26 auto · 4 to judge</span></div></div>
+        <div class="box good"><div class="row"><span><strong>1.5</strong> Which river runs through Cairo?</span><span class="pill okp">29 auto · 1 to judge</span></div></div>
+        <div class="box dim"><div class="row"><span><strong>1.9</strong> Name the film this score is from.</span><span class="pill">Not closed yet</span></div></div>
+        <div class="rule"></div>
+        <div class="row"><span class="lbl" style="margin:0">Round 1</span><span class="pill warnp">Can't publish until marked</span></div>
+        <div class="btn">Start marking 1.2<kbd>↵</kbd></div>
+        <div class="meta"><span class="pin">1</span>Question 7 is still running. Don't wait for the round to end.</div>`,
+      notes:[
+        ["1","The queue fills during play. A question closing puts it here immediately, and the marker works it while the room carries on."],
+        ["2","Auto-matched counts shown up front — “26 auto, 4 to judge” tells you the job is small before you open it."],
+        ["3","Unclosed questions are visible but greyed. Seeing what's coming helps pace the work."],
+        ["4","No host controls anywhere on this screen. A marker cannot open, close or reveal."]
+      ]
+    },
+    {
+      label:"2 · Marking",
+      html:`
+        <div class="row"><div class="lbl">1.2 · 2 points</div><div class="lbl">You hold this question</div></div>
+        <div class="rule"></div>
+        <h2 class="h">Who wrote <em>Great Expectations</em>?</h2>
+        <p class="p"><strong>Charles Dickens</strong> · also accepting: dickens · c dickens</p>
+        <div class="box dash">26 tables auto-matched and hidden</div>
+        <div class="rule"></div>
+        <div class="lbl">4 to judge · 1 of 4</div>
+        <div class="box"><div class="row"><span>Table 6</span><span class="pill">answered 20:44</span></div>
+          <div style="font-family:var(--sans);font-size:17px;font-weight:600;color:#2E3439;margin-top:5px">Charles Dickins</div></div>
+        <div class="big2"><div class="yes">Correct<kbd>Y</kbd></div><div class="no">Wrong<kbd>N</kbd></div></div>
+        <div class="btn ghost" style="margin-top:8px">Accept this spelling for every table<kbd>A</kbd></div>
+        <div class="meta"><span class="pin">2</span>Applies to all 30 and re-scores. Confirmed before it lands.</div>`,
+      notes:[
+        ["1","One answer at a time, large. This is done fast, and a dense list invites mis-taps."],
+        ["2","“Accept for every table” is the highest-value control here — one keypress retires a whole spelling variant. It rewrites the alias list, which is exactly why a marker claims the whole question. <span class='ref'>Design 6.3</span>"],
+        ["3","Y and N keys for anyone on a laptop; big targets for anyone on a tablet."],
+        ["4","The correct answer stays on screen. You're sweeping 30 tables holding one answer in your head."]
+      ]
+    },
+    {
+      label:"3 · Question done",
+      html:`
+        <div class="row"><div class="lbl">1.2 · complete</div><div class="lbl">Round 1</div></div>
+        <div class="rule"></div>
+        <h2 class="h">1.2 marked</h2>
+        <div class="box good"><div class="row"><span>Correct</span><span>27 tables</span></div></div>
+        <div class="box"><div class="row"><span>Wrong</span><span>2 tables</span></div></div>
+        <div class="box"><div class="row"><span>No answer</span><span>1 table</span></div></div>
+        <div class="meta">You accepted “dickins” for all tables — 1 extra table scored.</div>
+        <div class="rule"></div>
+        <div class="row"><span class="lbl" style="margin:0">Round 1 progress</span><span><span class="pill okp">1.2</span><span class="pill okp">1.5</span><span class="pill">1.9</span></span></div>
+        <div class="btn">Next question · 1.5</div>
+        <div class="btn ghost">Back to queue</div>`,
+      notes:[
+        ["1","A short summary rather than straight to the next question. It's the moment you'd notice 18 wrong answers and suspect the answer key, not the room."],
+        ["2","Round progress stays visible so the marker knows how close publishing is."],
+        ["3","Marks are absolute, never toggles — a double-tap or a retry produces the same result. <span class='ref'>Design 6.4</span>"]
+      ]
+    },
+    {
+      label:"4 · Re-queued",
+      html:`
+        <div class="row"><div class="lbl">Marker · Sam</div><div class="lbl">Round 1</div></div>
+        <div class="rule"></div>
+        <div class="box flag"><strong>1.5 reopened by the host</strong><br>
+          Table 21 was missed. Their answer changed and needs judging again.</div>
+        <div class="box good"><div class="row"><span><strong>1.5</strong> Which river runs through Cairo?</span><span class="pill warnp">1 to re-judge</span></div></div>
+        <div class="meta"><span class="pin">1</span>The other 29 marks stand. Only changed answers come back.</div>
+        <div class="rule"></div>
+        <div class="btn">Judge table 21</div>`,
+      notes:[
+        ["1","The edge case early marking creates. Reopening re-queues only tables whose answer actually changed — never the whole question. <span class='ref'>Design 2.4</span>"],
+        ["2","Say why it came back. A question reappearing with no explanation reads like a bug."]
+      ]
+    }
+  ]
+},
+floor: {
+  label:"Floor",
+  frame:"phone",
+  states:[
+    {
+      label:"1 · Room",
+      html:`
+        <div class="row"><div class="lbl">Floor · Jo</div><div class="lbl">Q7 open</div></div>
+        <div class="rule"></div>
+        <div class="row"><span class="lbl" style="margin:0">Tables</span><span class="lbl" style="margin:0">28 answering</span></div>
+        <div class="grid30">${Array.from({length:30},(_,i)=>{
+          const t=i+1; const bad=[14,21].includes(t); const quiet=[3].includes(t);
+          return `<div class="cell ${bad?'bad':(quiet?'quiet':'ok')}">${t}</div>`;
+        }).join("")}</div>
+        <div class="rule"></div>
+        <div class="lbl">Needs attention</div>
+        <div class="box flag"><div class="row"><span><strong>14</strong> · offline 11 min</span></div></div>
+        <div class="box flag"><div class="row"><span><strong>21</strong> · no answer this round</span></div></div>
+        <div class="box"><div class="row"><span><strong>3</strong> · quiet, 2 answers behind</span></div></div>`,
+      notes:[
+        ["1","Built for a phone held in one hand while walking. Table numbers big enough to tap without looking hard."],
+        ["2","The room at a glance, then a short list of what actually needs a visit. Not a data dashboard."],
+        ["3","No correct answers anywhere on this surface — this screen is readable over a shoulder in a crowded room. <span class='ref'>Design 7.7</span>"]
+      ]
+    },
+    {
+      label:"2 · Table",
+      html:`
+        <div class="row"><div class="lbl">Table 14</div><div class="lbl">The Quizzards</div></div>
+        <div class="rule"></div>
+        <div class="box flag">Last seen 11 minutes ago<br><span style="font-size:11px;color:var(--muted)">0 answers this round</span></div>
+        <div class="box"><div class="row"><span>Captain</span><span>Ash</span></div></div>
+        <div class="box"><div class="row"><span>Players</span><span>Ash · Jo · Sam</span></div></div>
+        <div class="rule"></div>
+        <button class="btn ghost">Show their code and passphrase</button>
+        <button class="btn ghost">Enter answer for this table</button>
+        <button class="btn ghost">Make someone else captain</button>
+        <button class="btn warn">Move table to paper</button>`,
+      notes:[
+        ["1","Four actions, in the order you'd try them. Show the code first — most problems are someone who never scanned."],
+        ["2","Passphrase shown here so floor can tell a table rather than pointing at a projector they can't read."],
+        ["3","“Move to paper” accepts reality. That table writes answers down and someone keys them in at the break."]
+      ]
+    },
+    {
+      label:"3 · Answer for a table",
+      html:`
+        <div class="row"><div class="lbl">Table 14 · Q7</div><div class="lbl">Open · closes soon</div></div>
+        <div class="rule"></div>
+        <h2 class="h">Who wrote <em>Great Expectations</em>?</h2>
+        <div class="box dash">Type what the table told you</div>
+        <div class="rule"></div>
+        <div class="box"><div class="row"><span>Reason</span><span class="pill on">Phone dead</span></div>
+          <div><span class="pill">Never scanned</span><span class="pill">No signal</span><span class="pill">Other</span></div></div>
+        <button class="btn">Submit for table 14</button>
+        <div class="meta"><span class="pin">2</span>Logged against you, with the reason, at this time.</div>`,
+      notes:[
+        ["1","The escape hatch that keeps the night moving when a table can't reach the app."],
+        ["2","Always logged with a reason. With prizes involved, this is the entry someone will ask about."],
+        ["3","Floor sees the question but never the answer — they're typing what a table dictated, not helping."]
+      ]
+    },
+    {
+      label:"4 · Names",
+      html:`
+        <div class="row"><div class="lbl">Table 9</div><div class="lbl">Rename</div></div>
+        <div class="rule"></div>
+        <div class="box flag">Team name flagged for review</div>
+        <div class="box"><div class="row"><span>Current</span><span style="font-family:var(--sans)">Quizzy McQuizface</span></div></div>
+        <div class="box dash">New team name</div>
+        <button class="btn">Rename</button>
+        <div class="rule"></div>
+        <div class="lbl">Players</div>
+        <div class="box"><div class="row"><span>Ash</span><span class="pill">captain</span></div></div>
+        <div class="box"><div class="row"><span>Dan</span><span class="pill">rename</span></div></div>
+        <div class="meta"><span class="pin">1</span>Team names appear on the big screen in large type.</div>`,
+      notes:[
+        ["1","Moderation belongs on the floor as well as in admin — the person who spots a bad name is the one walking the room. <span class='ref'>Scope 3.2</span>"],
+        ["2","Renaming is instant and doesn't ask the table's permission. It's a public screen."],
+        ["3","Reassigning captain from here covers a captain who's left without anyone taking over."]
+      ]
+    },
+    {
+      label:"5 · Log",
+      html:`
+        <div class="row"><div class="lbl">Tonight</div><div class="lbl">6 actions</div></div>
+        <div class="rule"></div>
+        <div class="box"><div class="row"><span>21:09 · Table 14</span><span class="pill">answer entered</span></div>
+          <div class="meta" style="margin-top:3px">Phone dead</div></div>
+        <div class="box"><div class="row"><span>20:52 · Table 9</span><span class="pill">renamed</span></div></div>
+        <div class="box"><div class="row"><span>20:40 · Table 3</span><span class="pill">code reissued</span></div></div>
+        <div class="box good"><div class="row"><span>20:31 · Table 27</span><span class="pill okp">resolved</span></div></div>
+        <div class="meta"><span class="pin">2</span>Same entries appear in the admin audit log.</div>`,
+      notes:[
+        ["1","Your own actions, so you can answer “did anyone sort table 14?” without walking back."],
+        ["2","One audit trail, several views onto it. Floor sees their slice; admin sees everything."],
+        ["3","Resolved items stay visible rather than vanishing — the night is short and context matters."]
+      ]
+    }
+  ]
+}
+};
+
+let dev="marker", idx=0;
+const $d=document.getElementById("devices"),$s=document.getElementById("steps"),$st=document.getElementById("stage"),$n=document.getElementById("notes");
+function render(){
+  $d.innerHTML="";
+  Object.keys(S).forEach(k=>{
+    const b=document.createElement("button");
+    b.textContent=S[k].label; b.setAttribute("role","tab");
+    b.setAttribute("aria-selected",k===dev);
+    b.onclick=()=>{dev=k;idx=0;render();};
+    $d.appendChild(b);
+  });
+  const d=S[dev], st=d.states[idx];
+  $s.innerHTML="";
+  d.states.forEach((s,i)=>{
+    const b=document.createElement("button"); b.className="step"; b.textContent=s.label;
+    b.setAttribute("aria-selected",i===idx); b.onclick=()=>{idx=i;render();}; $s.appendChild(b);
+  });
+  $st.innerHTML=`<div class="device ${d.frame}"><span class="tag">${d.label}</span>${d.frame==="phone"?'<div class="notch"></div>':''}<div class="screen">${st.html}</div></div>`;
+  $n.innerHTML=st.notes.map(n=>`<div class="note"><span class="pin">${n[0]}</span><span>${n[1]}</span></div>`).join("");
+}
+render();
+</script>
+</body>
+</html>

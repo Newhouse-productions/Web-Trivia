@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theme cascade — interactive mockup</title>
+<style>
+:root{
+  --paper:#E6E9EC;--card:#F7F8F9;--ink:#191C1F;--muted:#8A9299;--fill:#D2D7DB;
+  --line:#B4BBC1;--pin:#2F5FE0;--warn:#B4571F;--ok:#2C6E49;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.5}
+button,select,input{font-family:inherit;font-size:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible{outline:2px solid var(--pin);outline-offset:2px}
+
+header{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+h1{font-size:14px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:11px;margin-top:3px}
+
+main{padding:14px 16px 60px;max-width:1500px;margin:0 auto;display:grid;gap:18px}
+@media(min-width:1080px){main{grid-template-columns:340px minmax(0,1fr);align-items:start}}
+
+.panel{border:1px solid var(--line);border-radius:4px;background:var(--card);padding:12px}
+.lbl{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.rule{height:1px;background:var(--line);margin:11px 0}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+.levels{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap}
+.lv{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:2px;padding:5px 9px;font-size:11px}
+.lv[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+
+.ctl{margin-bottom:9px}
+.ctl label{display:block;font-size:10px;color:var(--muted);margin-bottom:3px}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{border:1px solid var(--line);background:#fff;color:#4A5157;border-radius:2px;padding:4px 8px;font-size:10.5px}
+.seg button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600;background:#EEF0F2}
+.seg button.inh{font-style:italic;color:var(--muted)}
+input[type=color]{width:100%;height:30px;padding:0;border:1px solid var(--line);border-radius:2px;background:#fff}
+select{width:100%;padding:5px;border:1px solid var(--line);border-radius:2px;background:#fff;color:#3A4046}
+
+.res{font-size:10.5px;color:#4A5157;background:#fff;border:1px solid var(--line);border-radius:3px;padding:8px}
+.res div{display:flex;justify-content:space-between;gap:8px;padding:1px 0}
+.res .from{color:var(--muted);font-size:9.5px}
+.chk{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);font-size:10.5px}
+.chk:last-child{border-bottom:none}
+.pass{color:var(--ok)}
+.fail{color:var(--warn);font-weight:600}
+
+.stagewrap{display:grid;gap:16px}
+.tag{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.bigscreen{width:100%;aspect-ratio:16/9;border:1px solid var(--line);border-radius:4px;overflow:hidden;position:relative}
+.bigscreen.small{width:26%;min-width:150px}
+.phones{display:flex;gap:14px;flex-wrap:wrap}
+.phone{width:225px;border:1px solid var(--line);border-radius:18px;padding:8px;background:var(--card)}
+.pscreen{border-radius:11px;overflow:hidden;min-height:390px;display:flex;flex-direction:column}
+.band{padding:9px 11px;display:flex;justify-content:space-between;align-items:baseline;font-family:var(--sans);font-size:11.5px;font-weight:600;border-bottom:1px solid rgba(0,0,0,.28)}
+.band .n{font-family:var(--mono);font-size:9.5px;opacity:.85;font-weight:400}
+.pbody{padding:11px;flex:1;font-family:var(--sans)}
+
+.opt{border-radius:4px;padding:8px 9px;margin-bottom:5px;font-size:11.5px}
+.opt.sel{font-weight:700}
+.imgph{border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;margin-bottom:8px}
+.foot{padding:0 16px 40px;max-width:1500px;margin:0 auto;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Theme cascade — interactive mockup</h1>
+  <div class="sub">Question overrides round overrides event default, per property. One theme, both surfaces.</div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="lbl">Editing</div>
+    <div class="levels" id="levels"></div>
+    <div id="editor"></div>
+    <div class="rule"></div>
+    <div class="lbl">Viewing question</div>
+    <select id="qsel"></select>
+    <div class="rule"></div>
+    <div class="lbl">Resolved</div>
+    <div class="res" id="resolved"></div>
+    <div class="rule"></div>
+    <div class="lbl">Contrast</div>
+    <div id="contrast"></div>
+    <div class="rule"></div>
+    <div class="row"><span class="lbl" style="margin:0">Back of the room</span>
+      <div class="seg"><button id="backrow" aria-pressed="false">Scale down</button></div></div>
+  </div>
+
+  <div class="stagewrap">
+    <div>
+      <div class="tag">Big screen</div>
+      <div class="bigscreen" id="big"></div>
+    </div>
+    <div>
+      <div class="tag">Phones · two teams, two colours</div>
+      <div class="phones" id="phones"></div>
+    </div>
+  </div>
+</main>
+
+<div class="foot">Team colour is the header band only. Everything below follows the configured theme, same as the projector.</div>
+
+<script>
+// ---------- content ----------
+const QUESTIONS = [
+  { id:"1.1", round:1, n:1, points:1, type:"mcq", prompt:"Which Australian city hosted the 2000 Olympics?",
+    options:["Melbourne","Sydney","Brisbane","Perth"], answer:"Sydney", theme:{} },
+  { id:"1.3", round:1, n:3, points:2, type:"mcq", image:true, prompt:"Which building is this?",
+    options:["Flinders Street","Opera House","Parliament House","MCG"], answer:"Opera House",
+    theme:{ layout:"image" } },
+  { id:"2.4", round:2, n:4, points:2, type:"text", prompt:"Name the film this score is from.",
+    answer:"Jurassic Park", theme:{} },
+  { id:"2.7", round:2, n:7, points:5, type:"text", prompt:"For five points — who is the only person to win an Oscar, Emmy, Grammy, Tony and a Nobel Prize?",
+    answer:"Bob Dylan", theme:{ layout:"statement", accent:"#4ADE80" } }
+];
+
+let EVENT = { layout:"standard", bg:"#1A1D24", bg2:"#2A2F3A", accent:"#E0A82E", title:"Winter Quiz",
+  logo:true, footer:"Proudly supported by The Anchor · #winterquiz" };
+let ROUNDS = { 1:{}, 2:{ layout:"media", bg:"#2A1A3E", bg2:"#160E24" } };
+
+const TEAMS = [
+  { name:"The Quizzards", table:"12", colour:"#C2410C", colour2:null },
+  { name:"Quizteama Aguilera", table:"4", colour:"#1D4ED8", colour2:"#1E3A8A" }
+];
+
+const LAYOUTS = ["standard","image","media","statement","text-answer"];
+
+// ---------- colour maths ----------
+const hex2rgb = h => { const n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; };
+function lum(h){
+  const c = hex2rgb(h).map(v=>{ v/=255; return v<=.03928 ? v/12.92 : Math.pow((v+.055)/1.055,2.4); });
+  return .2126*c[0] + .7152*c[1] + .0722*c[2];
+}
+function ratio(a,b){ const l1=lum(a), l2=lum(b); const [hi,lo]=l1>l2?[l1,l2]:[l2,l1]; return (hi+.05)/(lo+.05); }
+function mix(a,b,t){
+  const A=hex2rgb(a), B=hex2rgb(b);
+  return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join("");
+}
+const isDark = h => lum(h) < 0.35;
+
+// tokens derived from bg + accent
+function tokens(th){
+  const dark = isDark(th.bg);
+  const text = dark ? "#F5F5F0" : "#16191C";
+  return {
+    bg: th.bg, bg2: th.bg2 || th.bg,
+    surface: dark ? mix(th.bg,"#FFFFFF",.10) : mix(th.bg,"#000000",.06),
+    surfaceSel: dark ? mix(th.bg,"#FFFFFF",.22) : mix(th.bg,"#000000",.14),
+    text,
+    textMuted: dark ? mix(text,th.bg,.45) : mix(text,th.bg,.40),
+    border: dark ? mix(th.bg,"#FFFFFF",.24) : mix(th.bg,"#000000",.20),
+    accent: th.accent,
+    accentText: ratio(th.accent,"#16191C") > ratio(th.accent,"#F5F5F0") ? "#16191C" : "#F5F5F0"
+  };
+}
+
+// ---------- cascade ----------
+const PROPS = ["layout","bg","bg2","accent"];
+let level = "event", qi = 0;
+
+function resolve(q){
+  const r = ROUNDS[q.round] || {};
+  const out = {}, from = {};
+  PROPS.forEach(p=>{
+    if(q.theme[p] !== undefined){ out[p]=q.theme[p]; from[p]="question"; }
+    else if(r[p] !== undefined){ out[p]=r[p]; from[p]="round "+q.round; }
+    else { out[p]=EVENT[p]; from[p]="event"; }
+  });
+  out.title = EVENT.title;
+  return { theme: out, from };
+}
+
+// ---------- rendering ----------
+function bigScreen(q, T, th){
+  const grad = `linear-gradient(135deg, ${T.bg}, ${T.bg2})`;
+  const logo = EVENT.logo ? `<div style="position:absolute;top:3.2%;right:3.4%;
+      height:5.2cqw;aspect-ratio:2.4/1;border-radius:.5cqw;
+      background:${T.surface};border:1px solid ${T.border};color:${T.textMuted};
+      display:flex;align-items:center;justify-content:center;font-size:1.5cqw;letter-spacing:.1em">LOGO</div>` : "";
+  const footer = EVENT.footer ? `<div style="position:absolute;left:0;right:0;bottom:0;height:7.5cqw;
+      background:${T.surface};border-top:1px solid ${T.border};color:${T.textMuted};
+      display:flex;align-items:center;padding:0 4.5%;font-size:2cqw">${EVENT.footer}</div>` : "";
+  const padBottom = EVENT.footer ? "10.5cqw" : "4.5%";
+  const wrap = s => `<div style="width:100%;height:100%;background:${grad};color:${T.text};
+      font-family:var(--sans);padding:4.5%;padding-bottom:${padBottom};position:relative;
+      display:flex;flex-direction:column;">${s}${logo}${footer}</div>`;
+  const eyebrow = `<div style="font-size:2.2cqw;letter-spacing:.12em;color:${T.accent};text-transform:uppercase;font-weight:600">
+      Round ${q.round} · Q${q.n} · ${q.points} pt${q.points>1?"s":""}</div>`;
+
+  if(th.layout==="media")
+    return wrap(`${eyebrow}<div style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center">
+      <div><div style="font-size:7cqw;font-weight:800;letter-spacing:-.015em">${T.title}</div>
+      <div style="font-size:3cqw;color:${T.textMuted};margin-top:1.6cqw">Listen carefully</div></div></div>`);
+
+  if(th.layout==="statement")
+    return wrap(`${eyebrow}<div style="flex:1;display:flex;align-items:center">
+      <div style="font-size:6.4cqw;font-weight:800;line-height:1.13;letter-spacing:-.015em">${q.prompt}</div></div>`);
+
+  if(th.layout==="image")
+    return wrap(`${eyebrow}
+      <div style="flex:1;display:flex;gap:3%;align-items:center;margin-top:1.5cqw">
+        <div style="flex:1.25;aspect-ratio:4/3;border-radius:1cqw;background:${T.surface};
+          border:1px solid ${T.border};display:flex;align-items:center;justify-content:center;
+          color:${T.textMuted};font-size:2.2cqw">image</div>
+        <div style="flex:1"><div style="font-size:4.2cqw;font-weight:700;line-height:1.16">${q.prompt}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1cqw;margin-top:2cqw">
+        ${(q.options||[]).map(o=>`<div style="background:${T.surface};border:1px solid ${T.border};
+          border-radius:.8cqw;padding:1.1cqw 1.2cqw;font-size:2.3cqw">${o}</div>`).join("")}</div></div>
+      </div>`);
+
+  if(th.layout==="text-answer")
+    return wrap(`${eyebrow}<div style="flex:1;display:flex;align-items:center">
+      <div style="font-size:5.4cqw;font-weight:700;line-height:1.16;letter-spacing:-.01em">${q.prompt}</div></div>`);
+
+  return wrap(`${eyebrow}
+    <div style="font-size:4.8cqw;font-weight:700;line-height:1.15;margin-top:1.8cqw;letter-spacing:-.01em">${q.prompt}</div>
+    <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1.3cqw;align-content:center;margin-top:2cqw">
+      ${(q.options||[]).map(o=>`<div style="background:${T.surface};border:1px solid ${T.border};
+        border-radius:.9cqw;padding:1.5cqw 1.7cqw;font-size:3cqw">${o}</div>`).join("")}
+    </div>`);
+}
+
+function phone(team, q, T, th){
+  const bandGrad = team.colour2 ? `linear-gradient(135deg, ${team.colour}, ${team.colour2})` : team.colour;
+  const bandText = ratio(team.colour,"#16191C") > ratio(team.colour,"#FFFFFF") ? "#16191C" : "#FFFFFF";
+  const grad = `linear-gradient(160deg, ${T.bg}, ${T.bg2})`;
+
+  let body = "";
+  const eyebrow = `<div style="font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:${T.accent}">
+      R${q.round} · Q${q.n} · ${q.points} pt${q.points>1?"s":""}</div>`;
+
+  if(th.layout==="media"){
+    body = `${eyebrow}<div style="text-align:center;padding:70px 0">
+      <div style="font-size:15px;font-weight:700">Listen up</div>
+      <div style="font-size:11px;color:${T.textMuted};margin-top:5px">Answer opens after the clip</div></div>`;
+  } else if(th.layout==="statement"){
+    body = `${eyebrow}<div style="font-size:16px;font-weight:700;line-height:1.28;margin:12px 0 14px">${q.prompt}</div>
+      <div style="border:1px solid ${T.border};background:${T.surface};border-radius:4px;padding:11px;
+        font-size:11.5px;color:${T.textMuted}">Type your answer</div>
+      <div style="background:${T.accent};color:${T.accentText};border-radius:4px;padding:10px;
+        text-align:center;font-weight:700;font-size:12px;margin-top:6px">Submit answer</div>`;
+  } else if(q.type==="text"){
+    body = `${eyebrow}<div style="font-size:14px;font-weight:600;line-height:1.3;margin:8px 0 11px">${q.prompt}</div>
+      <div style="border:1px solid ${T.border};background:${T.surface};border-radius:4px;padding:11px;
+        font-size:11.5px;color:${T.textMuted}">Type your answer</div>
+      <div style="background:${T.accent};color:${T.accentText};border-radius:4px;padding:10px;
+        text-align:center;font-weight:700;font-size:12px;margin-top:6px">Submit answer</div>`;
+  } else {
+    const img = th.layout==="image"
+      ? `<div class="imgph" style="aspect-ratio:4/3;background:${T.surface};border:1px solid ${T.border};color:${T.textMuted}">image</div>` : "";
+    body = `${eyebrow}<div style="font-size:14px;font-weight:600;line-height:1.3;margin:8px 0 10px">${q.prompt}</div>${img}
+      ${(q.options||[]).map((o,i)=>`<div class="opt ${i===1?"sel":""}"
+        style="background:${i===1?T.surfaceSel:T.surface};color:${T.text};
+        border:${i===1?"2px":"1px"} solid ${i===1?T.text:T.border}">${o}</div>`).join("")}`;
+  }
+
+  return `<div class="phone"><div class="pscreen" style="background:${grad};color:${T.text}">
+    <div class="band" style="background:${bandGrad};color:${bandText}">
+      <span>${team.name}</span><span class="n">Table ${team.table}</span></div>
+    <div class="pbody">${body}</div>
+  </div></div>`;
+}
+
+// ---------- contrast panel ----------
+function contrastPanel(T){
+  const pairs = [
+    ["Projector · text on bg", T.text, T.bg, 7],
+    ["Projector · accent on bg", T.accent, T.bg, 7],
+    ["Phone · text on surface", T.text, T.surface, 4.5],
+    ["Phone · muted on bg", T.textMuted, T.bg, 4.5],
+    ["Phone · accent text on accent", T.accentText, T.accent, 4.5],
+    ["Projector · footer on band", T.textMuted, T.surface, 7]
+  ];
+  return pairs.map(([label,a,b,bar])=>{
+    const r = ratio(a,b), ok = r >= bar;
+    return `<div class="chk"><span>${label}</span>
+      <span class="${ok?"pass":"fail"}">${r.toFixed(1)}:1 ${ok?"✓":"· needs "+bar}</span></div>`;
+  }).join("");
+}
+
+// ---------- editor ----------
+function target(){ return level==="event" ? EVENT : level.startsWith("round") ? ROUNDS[+level.slice(-1)] : QUESTIONS[qi].theme; }
+
+function editor(){
+  const t = target(), isEvent = level==="event";
+  const has = p => t[p] !== undefined;
+  const seg = (p, vals) => `<div class="seg">
+    ${isEvent?"":`<button class="inh" data-clear="${p}" aria-pressed="${!has(p)}">inherit</button>`}
+    ${vals.map(v=>`<button data-set="${p}" data-val="${v}" aria-pressed="${t[p]===v}">${v}</button>`).join("")}
+  </div>`;
+
+  return `
+    <div class="ctl"><label>Layout</label>${seg("layout", LAYOUTS)}</div>
+    <div class="ctl"><label>Background ${isEvent||has("bg")?"":"<em>(inherited)</em>"}</label>
+      <input type="color" data-col="bg" value="${t.bg || resolve(QUESTIONS[qi]).theme.bg}"></div>
+    <div class="ctl"><label>Background 2 · gradient end</label>
+      <input type="color" data-col="bg2" value="${t.bg2 || resolve(QUESTIONS[qi]).theme.bg2}"></div>
+    <div class="ctl"><label>Accent</label>
+      <input type="color" data-col="accent" value="${t.accent || resolve(QUESTIONS[qi]).theme.accent}"></div>
+    ${isEvent ? `
+      <div class="rule"></div>
+      <div class="lbl">Chrome · set once, event only</div>
+      <div class="ctl"><label>Logo</label>
+        <div class="seg"><button data-chrome="logo" data-val="on" aria-pressed="${!!EVENT.logo}">Show</button>
+        <button data-chrome="logo" data-val="off" aria-pressed="${!EVENT.logo}">None</button></div></div>
+      <div class="ctl"><label>Footer band</label>
+        <input type="text" data-footer="1" value="${EVENT.footer||""}" placeholder="Sponsor or hashtag"
+          style="width:100%;padding:6px;border:1px solid var(--line);border-radius:2px"></div>
+      <div class="seg"><button data-chrome="footer" data-val="off" aria-pressed="${!EVENT.footer}">No footer</button></div>
+    ` : `<div class="seg"><button data-clearall="1">Clear all overrides at this level</button></div>`}`;
+}
+
+// ---------- wire up ----------
+const $ = id => document.getElementById(id);
+let backrow = false;
+
+function render(){
+  const q = QUESTIONS[qi];
+  const { theme, from } = resolve(q);
+  const T = tokens(theme);
+
+  $("levels").innerHTML = [["event","Event default"],["round1","Round 1"],["round2","Round 2"],["question","Question "+q.id]]
+    .map(([k,l])=>`<button class="lv" data-lv="${k}" aria-selected="${level===k}">${l}</button>`).join("");
+  $("editor").innerHTML = editor();
+
+  $("qsel").innerHTML = QUESTIONS.map((x,i)=>`<option value="${i}" ${i===qi?"selected":""}>${x.id} — ${x.prompt.slice(0,38)}…</option>`).join("");
+
+  $("resolved").innerHTML = PROPS.map(p=>`<div><span>${p}</span>
+    <span>${theme[p]} <span class="from">${from[p]}</span></span></div>`).join("");
+  $("contrast").innerHTML = contrastPanel(T);
+
+  $("big").className = "bigscreen" + (backrow ? " small" : "");
+  $("big").style.containerType = "inline-size";
+  $("big").innerHTML = bigScreen(q, T, theme);
+  $("phones").innerHTML = TEAMS.map(t=>phone(t, q, T, theme)).join("");
+  $("backrow").setAttribute("aria-pressed", backrow);
+}
+
+document.addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  if(b.dataset.lv){ level = b.dataset.lv; render(); }
+  else if(b.dataset.set){ target()[b.dataset.set] = b.dataset.val; render(); }
+  else if(b.dataset.clear){ delete target()[b.dataset.clear]; render(); }
+  else if(b.dataset.clearall){ const t=target(); Object.keys(t).forEach(k=>delete t[k]); render(); }
+  else if(b.dataset.chrome==="logo"){ EVENT.logo = b.dataset.val==="on"; render(); }
+  else if(b.dataset.chrome==="footer"){ EVENT.footer = ""; render(); }
+  else if(b.id==="backrow"){ backrow = !backrow; render(); }
+});
+document.addEventListener("input", e=>{
+  if(e.target.dataset.col){ target()[e.target.dataset.col] = e.target.value; render(); }
+  else if(e.target.dataset.footer){ EVENT.footer = e.target.value; render(); }
+});
+$("qsel").addEventListener("change", e=>{ qi = +e.target.value; if(level==="question") render(); else render(); });
+
+render();
+</script>
+</body>
+</html>

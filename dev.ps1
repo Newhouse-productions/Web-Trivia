@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "Starting app..." -ForegroundColor Cyan
-$app = Start-Process node -ArgumentList "src\hello.js" -PassThru -NoNewWindow
+$app = Start-Process node -ArgumentList "src\server.js" -PassThru -NoNewWindow
 Start-Sleep -Seconds 2
 
 Write-Host "Starting tunnel..." -ForegroundColor Cyan

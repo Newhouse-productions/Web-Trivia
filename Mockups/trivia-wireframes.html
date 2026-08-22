@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia night — wireframes</title>
+<style>
+:root{
+  --paper:#E6E9EC;
+  --card:#F7F8F9;
+  --ink:#191C1F;
+  --muted:#8A9299;
+  --fill:#D2D7DB;
+  --line:#B4BBC1;
+  --pin:#2F5FE0;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- chrome ---------- */
+header{
+  padding:20px 18px 14px;
+  border-bottom:1px solid var(--line);
+}
+h1{
+  font-size:15px;
+  font-weight:600;
+  margin:0;
+  letter-spacing:-0.01em;
+}
+.sub{
+  color:var(--muted);
+  font-size:11.5px;
+  margin-top:4px;
+  letter-spacing:0.02em;
+}
+nav{
+  display:flex;
+  gap:6px;
+  padding:12px 18px;
+  overflow-x:auto;
+  border-bottom:1px solid var(--line);
+  -webkit-overflow-scrolling:touch;
+}
+nav button, .step{
+  font-family:var(--mono);
+  font-size:11.5px;
+  padding:6px 11px;
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--muted);
+  border-radius:2px;
+  cursor:pointer;
+  white-space:nowrap;
+  letter-spacing:0.02em;
+}
+nav button[aria-selected="true"]{
+  background:var(--ink);
+  border-color:var(--ink);
+  color:var(--paper);
+}
+.step[aria-selected="true"]{
+  border-color:var(--ink);
+  color:var(--ink);
+  background:var(--card);
+}
+nav button:focus-visible,.step:focus-visible{outline:2px solid var(--pin);outline-offset:2px}
+.steps{
+  display:flex;
+  gap:6px;
+  padding:12px 18px 4px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* ---------- canvas ---------- */
+main{
+  padding:14px 18px 60px;
+  display:grid;
+  gap:20px;
+  max-width:1180px;
+  margin:0 auto;
+}
+@media(min-width:900px){
+  main{grid-template-columns:minmax(0,1fr) 300px;align-items:start}
+}
+.stage{display:flex;justify-content:center}
+
+/* device frames */
+.device{background:var(--card);border:1px solid var(--line);position:relative}
+.device.phone{width:100%;max-width:300px;border-radius:22px;padding:11px}
+.device.wide{width:100%;border-radius:5px;padding:11px}
+.screen{background:#fff;border:1px solid var(--line);min-height:380px;padding:14px;position:relative;overflow:hidden}
+.phone .screen{border-radius:13px}
+.notch{width:52px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 9px}
+.tag{
+  position:absolute;top:-9px;left:12px;
+  background:var(--paper);padding:0 6px;
+  font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;
+}
+
+/* ---------- wireframe primitives ---------- */
+.band{margin:-14px -14px 11px;padding:9px 13px;background:#C2410C;color:#fff;border-bottom:1px solid rgba(0,0,0,.25);display:flex;justify-content:space-between;align-items:baseline;font-family:var(--sans);font-size:12px;font-weight:600}
+.band .num{font-family:var(--mono);font-size:10.5px;opacity:.85;font-weight:400}
+.wf-label{font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.wf-h{font-family:var(--sans);font-size:16px;font-weight:600;line-height:1.3;margin:0 0 10px;color:#3A4046}
+.wf-p{font-family:var(--sans);font-size:12.5px;color:#6A7278;margin:0 0 10px}
+.bar{background:var(--fill);border-radius:2px;height:11px;margin-bottom:6px}
+.bar.w80{width:80%}.bar.w60{width:60%}.bar.w40{width:40%}
+.box{border:1px solid var(--line);border-radius:3px;padding:10px 11px;margin-bottom:7px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff}
+.box.sel{border:2px solid var(--ink);background:#F0F2F3;font-weight:600;color:var(--ink)}
+.box.dash{border-style:dashed;color:var(--muted)}
+.btn{
+  border:1px solid var(--ink);background:var(--ink);color:#fff;
+  border-radius:3px;padding:10px;text-align:center;
+  font-family:var(--sans);font-size:12.5px;font-weight:600;margin-top:4px;
+}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.off{background:var(--fill);border-color:var(--fill);color:#fff}
+.field{border:1px solid var(--line);border-radius:3px;padding:12px 11px;font-family:var(--sans);font-size:12.5px;color:var(--muted);background:#fff;margin-bottom:7px}
+.meta{font-size:10.5px;color:var(--muted);margin-top:9px;letter-spacing:0.01em}
+.rule{height:1px;background:var(--line);margin:13px 0}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:3px 9px;font-size:10px;color:var(--muted);margin:0 4px 4px 0}
+.pill.on{border-color:var(--ink);color:var(--ink)}
+.stack{display:flex;flex-direction:column;gap:0}
+
+/* answered grid */
+.grid30{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin-top:8px}
+@media(max-width:520px){.grid30{grid-template-columns:repeat(6,1fr)}}
+.cell{aspect-ratio:1;border:1px solid var(--line);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:8.5px;color:var(--muted)}
+.cell.in{background:var(--fill);border-color:var(--fill);color:#5C646A}
+
+/* big screen */
+.jumbo{font-family:var(--sans);font-size:20px;font-weight:700;line-height:1.25;color:#3A4046;margin:0 0 14px}
+.lb-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-family:var(--sans);font-size:12.5px;color:#4A5157}
+.lb-row .n{color:var(--muted);width:20px;display:inline-block;font-family:var(--mono);font-size:11px}
+.qrgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.qr{aspect-ratio:1;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);background:repeating-conic-gradient(var(--fill) 0% 25%,#fff 0% 50%) 50%/6px 6px}
+
+/* ---------- annotations ---------- */
+.pin{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--pin);color:#fff;font-size:9.5px;font-weight:600;
+  vertical-align:middle;margin-right:6px;flex:none;
+}
+aside{border-top:1px solid var(--line);padding-top:14px}
+@media(min-width:900px){aside{border-top:none;border-left:1px solid var(--line);padding:0 0 0 20px}}
+.aside-h{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+.note{display:flex;gap:2px;margin-bottom:12px;font-size:12px;line-height:1.5;color:#3E454B}
+.note code{background:#DCE0E4;padding:1px 4px;border-radius:2px;font-size:11px}
+.ref{color:var(--pin);font-size:10.5px;letter-spacing:0.03em}
+footer{padding:0 18px 40px;max-width:1180px;margin:0 auto;color:var(--muted);font-size:11px}
+@media (prefers-reduced-motion:no-preference){
+  .screen{transition:opacity .12s ease}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trivia night — wireframes</h1>
+  <div class="sub">v0.1 · low fidelity · 30 tables · 3 rounds × 10 questions</div>
+</header>
+
+<nav id="devices" role="tablist"></nav>
+<div class="steps" id="steps"></div>
+
+<main>
+  <div class="stage" id="stage"></div>
+  <aside>
+    <div class="aside-h">Notes on this screen</div>
+    <div id="notes"></div>
+  </aside>
+</main>
+
+<footer>Greyscale is deliberate — these show structure and state, not visual design.</footer>
+
+<script>
+const S = {
+  player: {
+    label: "Player phone",
+    frame: "phone",
+    states: [
+      {
+        label: "1 · Pick name",
+        html: `
+          <div class="band"><span>The Quizzards</span><span class="num">Table 12</span></div>
+          <h2 class="wf-h">Who's on this phone?</h2>
+          <p class="wf-p">Pick your name, or add it if you're new.</p>
+          <div class="box"><div class="row"><span>Dave</span><span class="pill">Captain</span></div></div>
+          <div class="box">Priya</div>
+          <div class="box">Marcus</div>
+          <div class="box dash">+ Add your name</div>
+          <div class="meta">Remembered on this phone. Rescanning skips this step.</div>`,
+        notes: [
+          ["1","Names are stored against the <em>table</em>, not the device. Everyone at table 12 sees this same list."],
+          ["2","No passwords. Anyone could pick anyone's name — acceptable for trivia, worth knowing."],
+          ["0","The coloured band is the table's theme — identity only, constant all night, matching the printed card. Everything below it follows the event/round/question theme, so phone and projector share a moment."],
+          ["3","Captain shows as a badge. One table, one captain — and the first person to open this page becomes it automatically, so no table is ever locked out."],
+          ["4","Host can rename anyone from the console if something rude appears. <span class='ref'>Scope 3.2</span>"]
+        ]
+      },
+      {
+        label: "2 · Name the team",
+        html: `
+          <div class="wf-label">Table 12 · Dave</div>
+          <h2 class="wf-h">Name your team</h2>
+          <p class="wf-p">You're the captain, so this one's yours.</p>
+          <div class="field">The Quizzards</div>
+          <div class="meta">24 characters left · shown on the big screen</div>
+          <div class="btn">Save team name</div>
+          <div class="rule"></div>
+          <div class="meta"><span class="pin">2</span>Currently showing as <strong>Table 12</strong>. Change it before round 1 starts.</div>
+          <div class="btn ghost">Keep Table 12</div>`,
+        notes: [
+          ["1","Only the captain sees this. Everyone else sees the name once it's set — no committee at the table."],
+          ["2","Falls back to the table number if nobody names it, so an unnamed table never breaks the leaderboard."],
+          ["3","The host can pre-fill names before doors open; the captain can then change it unless the host locks it. <span class='ref'>Scope 3.1</span>"],
+          ["4","Character limit does real work — long names wreck the big screen and invite mischief."],
+          ["5","Locks when round 1 starts. Renaming mid-game makes the leaderboard unreadable."]
+        ]
+      },
+      {
+        label: "3 · Waiting",
+        html: `
+          <div class="band"><span>The Quizzards</span><span class="num">Table 12 · Dave</span></div>
+          <div class="row"><div class="wf-label">Round 1</div></div>
+          <div class="rule"></div>
+          <div style="padding:56px 0;text-align:center">
+            <h2 class="wf-h" style="margin-bottom:6px">Question 3 coming up</h2>
+            <p class="wf-p">Eyes on the screen.</p>
+          </div>
+          <div class="rule"></div>
+          <div class="row"><span class="meta">Answered 2 of 10</span><span class="meta">Score 2</span></div>`,
+        notes: [
+          ["1","Holding state between questions. Deliberately empty so phones don't compete with the room."],
+          ["2","Audio and video play on the venue system only — never mirrored here. <span class='ref'>Scope 8</span>"]
+        ]
+      },
+      {
+        label: "4 · Following along",
+        html: `
+          <div class="row"><div class="wf-label">Q4 · Round 1 · 1 pt</div><div class="wf-label">Open</div></div>
+          <h2 class="wf-h">Which Australian city hosted the 2000 Olympics?</h2>
+          <div class="box">A · Melbourne</div>
+          <div class="box sel">B · Sydney</div>
+          <div class="box">C · Brisbane</div>
+          <div class="box">D · Perth</div>
+          <div class="rule"></div>
+          <div class="meta"><span class="pin">1</span><strong>Dave</strong> is answering for your table. He picked <strong>Sydney</strong>.</div>
+          <div class="btn ghost" style="margin-top:9px">Take over as captain</div>
+          <div class="meta" style="margin-top:6px">Use this if Dave's phone dies.</div>`,
+        notes: [
+          ["1","Options are shown but aren't controls. Absent rather than disabled, with the reason stated."],
+          ["2","Everyone still sees the question on their own phone — an accessibility win for anyone who can't read the projector, whether or not they're answering."],
+          ["3","Handover is one tap and allowed mid-question — a dead battery doesn't wait for a convenient moment. It's announced to the table and logged."],
+          ["4","Unauthenticated, like usernames. Someone can seize captaincy from a working captain; visibility is the mitigation, not permission."]
+        ]
+      },
+      {
+        label: "5 · Captain answering",
+        html: `
+          <div class="row"><div class="wf-label">Q4 · Round 1 · 1 pt</div><div class="wf-label">Open</div></div>
+          <h2 class="wf-h">Which Australian city hosted the 2000 Olympics?</h2>
+          <div class="box">A · Melbourne</div>
+          <div class="box sel">B · Sydney</div>
+          <div class="box">C · Brisbane</div>
+          <div class="box">D · Perth</div>
+          <div class="rule"></div>
+          <div class="meta"><span class="pin">1</span>Answer submitted — <strong>Sydney</strong>, 8:42pm</div>
+          <div class="meta" style="margin-top:6px">Tap another option to change it until the host closes.</div>`,
+        notes: [
+          ["1","Captain view. One answer per table, written by one device, changeable until close. No conflict to resolve. <span class='ref'>Scope 3.1</span>"],
+          ["2","Selection state has to be unmistakable at a dark table after two drinks. Heavy border, not colour alone."],
+          ["3","No countdown shown here — host controls open and close. <span class='ref'>Scope 3.3, undecided</span>"]
+        ]
+      },
+      {
+        label: "6 · Image question",
+        html: `
+          <div class="row"><div class="wf-label">Q9 · Round 2 · 2 pts</div><div class="wf-label">Open</div></div>
+          <h2 class="wf-h">Which building is this?</h2>
+          <div style="border:1px solid var(--line);border-radius:3px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10.5px;background:repeating-linear-gradient(45deg,#F2F4F5 0 8px,#fff 8px 16px);margin-bottom:9px">image</div>
+          <div class="field">Type your answer</div>
+          <div class="btn">Submit answer</div>
+          <div class="meta"><span class="pin">1</span>Pinch to zoom. Same image as the big screen.</div>`,
+        notes: [
+          ["1","Putting the image on phones is an accessibility win — the back of the room can't read a projector, and a table can zoom in."],
+          ["2","Roughly 100 KB per image, 240 devices. Trivial for the connection, but compress on import rather than shipping a 4 MB camera file."],
+          ["3","Image loads with the question, not before. Preloading would let a table see what's coming."]
+        ]
+      },
+      {
+        label: "7 · Video replay",
+        html: `
+          <div class="row"><div class="wf-label">Q6 · Round 1 · 2 pts</div><div class="wf-label">Closed</div></div>
+          <h2 class="wf-h">Name the film this score is from.</h2>
+          <div class="box sel">Jurassic Park</div>
+          <div class="meta">Marked correct · +2</div>
+          <div class="rule"></div>
+          <div class="wf-label">Watch it again</div>
+          <div style="border:1px solid var(--line);border-radius:3px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10.5px;background:#F2F4F5;margin-bottom:8px">▶ embedded video</div>
+          <div class="meta"><span class="pin">1</span>Unlocked after the big screen played it.</div>`,
+        notes: [
+          ["1","The embed stays locked until the big screen has played it <em>and</em> the question closes. Unlocking at play time would let tables scrub back while answering."],
+          ["2","Once unlocked it stays unlocked, so the deck becomes a browsable archive by the end of the night."],
+          ["3","Watch the audio. Thirty tables unmuting a clip at once is chaos — default muted, headphones nudge, or leave replay to the end."]
+        ]
+      },
+      {
+        label: "8 · Free text",
+        html: `
+          <div class="row"><div class="wf-label">Q7 · Round 1 · 1 pt</div><div class="wf-label">Open</div></div>
+          <h2 class="wf-h">Who wrote <em>Great Expectations</em>?</h2>
+          <div class="field">Type your answer</div>
+          <div class="btn">Submit answer</div>
+          <div class="rule"></div>
+          <div class="meta"><span class="pin">1</span>Answer submitted — <strong>Dickens</strong>, 8:51pm</div>
+          <div class="btn ghost" style="margin-top:9px">Change answer</div>`,
+        notes: [
+          ["1","Same confirmation line as multiple choice — one pattern, learned once."],
+          ["2","Every free-text answer here becomes 30 manual marks on the host console. Cap at 2–3 per round. <span class='ref'>Scope 3.4</span>"],
+          ["3","No spellcheck nagging or autocorrect fights. Accept loosely, match aliases server-side."]
+        ]
+      },
+      {
+        label: "9 · Locked",
+        html: `
+          <div class="row"><div class="wf-label">Q7 · Round 1</div><div class="wf-label">Closed</div></div>
+          <h2 class="wf-h">Who wrote <em>Great Expectations</em>?</h2>
+          <div class="box sel">Dickens</div>
+          <div class="meta">Locked at 8:52pm · submitted by Dave</div>
+          <div class="rule"></div>
+          <div class="wf-label">Correct answer</div>
+          <p class="wf-p" style="font-size:14px;font-weight:600;color:#3A4046">Charles Dickens</p>
+          <div class="meta">Marked correct · +1</div>`,
+        notes: [
+          ["1","Closed state must look visibly different from open, or people keep tapping and think it's broken."],
+          ["2","Reveal is a separate host action from close — there's a marking gap in between for free text."]
+        ]
+      },
+      {
+        label: "10 · Round break",
+        html: `
+          <div class="wf-label">Round 1 complete</div>
+          <h2 class="wf-h">Table 12 — 7 of 10</h2>
+          <div class="rule"></div>
+          <div class="wf-label">Leaderboard</div>
+          <div class="lb-row"><span><span class="n">1</span>Quizteama Aguilera</span><span>9</span></div>
+          <div class="lb-row"><span><span class="n">2</span>Table 4</span><span>8</span></div>
+          <div class="lb-row" style="font-weight:600;color:#191C1F"><span><span class="n">3</span>The Quizzards</span><span>7</span></div>
+          <div class="lb-row"><span><span class="n">4</span>Table 4</span><span>7</span></div>
+          <div class="rule"></div>
+          <div class="meta">Round 2 starts shortly.</div>`,
+        notes: [
+          ["1","Table 12 sits mid-list against named teams — the argument for letting tables choose a name. <span class='ref'>Scope 3.1</span>"],
+          ["2","This screen is also the marking window. Give the room a break while free text is judged."]
+        ]
+      }
+    ]
+  },
+
+  host: {
+    label: "Host console",
+    frame: "wide",
+    states: [
+      {
+        label: "1 · Running a question",
+        html: `
+          <div class="row"><div class="wf-label">Round 1 · Question 4 of 10</div><div class="wf-label">Open · 01:12</div></div>
+          <div class="rule"></div>
+          <h2 class="wf-h">Which Australian city hosted the 2000 Olympics?</h2>
+          <p class="wf-p">Answer: Sydney · Multiple choice · 1 point · AV cue 04</p>
+          <div class="row" style="gap:7px;margin:12px 0">
+            <div class="btn ghost" style="flex:1;margin:0">Close question</div>
+            <div class="btn off" style="flex:1;margin:0">Reveal answer</div>
+            <div class="btn off" style="flex:1;margin:0">Next</div>
+          </div>
+          <div class="rule"></div>
+          <div class="row"><span class="wf-label" style="margin:0">Tables answered</span><span class="wf-label" style="margin:0">23 / 30</span></div>
+          <div class="grid30">
+            ${Array.from({length:30},(_,i)=>`<div class="cell ${i<23?'in':''}">${i+1}</div>`).join("")}
+          </div>
+          <div class="meta"><span class="pin">2</span>7 tables outstanding — 3, 9, 14, 21, 25, 28, 30</div>`,
+        notes: [
+          ["1","One question on screen at a time. The host is talking to a room, not reading a dashboard."],
+          ["2","The grid is the whole reason this screen exists — it tells you whether to wait or move on. Chase a stuck table by number."],
+          ["3","Reveal stays disabled until the question is closed, so nothing leaks early."]
+        ]
+      },
+      {
+        label: "2 · Marking free text",
+        html: `
+          <div class="row"><div class="wf-label">Marking · Round 1, Q7</div><div class="wf-label">6 of 30 to judge</div></div>
+          <div class="rule"></div>
+          <h2 class="wf-h">Who wrote <em>Great Expectations</em>?</h2>
+          <p class="wf-p">Accepted: Charles Dickens · Dickens · C Dickens</p>
+          <div class="rule"></div>
+          <div class="meta" style="margin-bottom:9px"><span class="pin">1</span>24 auto-matched against the alias list — hidden.</div>
+          <div class="box"><div class="row"><span>Table 6 — <strong>Charles Dickins</strong></span><span class="pill">Correct</span><span class="pill">Wrong</span></div></div>
+          <div class="box"><div class="row"><span>Table 11 — <strong>dickens, charles</strong></span><span class="pill">Correct</span><span class="pill">Wrong</span></div></div>
+          <div class="box"><div class="row"><span>Table 19 — <strong>Charles Darwin</strong></span><span class="pill">Correct</span><span class="pill">Wrong</span></div></div>
+          <div class="box"><div class="row"><span>Table 22 — <strong>(no answer)</strong></span><span class="pill">Correct</span><span class="pill on">Wrong</span></div></div>
+          <div class="btn" style="margin-top:9px">Publish round 1 scores</div>`,
+        notes: [
+          ["1","Aliases do the heavy lifting. The marker only sees genuine edge cases, which turns 300 judgements into perhaps 40. <span class='ref'>Scope 3.4</span>"],
+          ["2","Marking one question across all tables beats marking one table across all questions — you hold a single answer in your head."],
+          ["3","Two big targets, no dropdowns. This is done fast, under pressure, with a room waiting."]
+        ]
+      },
+      {
+        label: "3 · Setup",
+        html: `
+          <div class="wf-label">Before the night</div>
+          <div class="rule"></div>
+          <h2 class="wf-h">Question set</h2>
+          <div class="box"><div class="row"><span>Round 1 — 10 questions</span><span class="meta">7 choice · 3 text</span></div></div>
+          <div class="box"><div class="row"><span>Round 2 — 10 questions</span><span class="meta">8 choice · 2 text</span></div></div>
+          <div class="box"><div class="row"><span>Round 3 — 10 questions</span><span class="meta">7 choice · 3 text</span></div></div>
+          <div class="box dash">Import question spreadsheet</div>
+          <div class="rule"></div>
+          <h2 class="wf-h">Tables</h2>
+          <div class="row"><span class="meta">30 tables · 30 unique links generated</span><span class="pill on">Print QR sheet</span></div>
+          <div class="rule"></div>
+          <div class="row"><span class="meta"><span class="pin">3</span>Public address</span><span class="meta">quiz.example.com — live</span></div>`,
+        notes: [
+          ["1","Questions authored in a spreadsheet, imported once. Nobody types 30 questions into a web form."],
+          ["2","QR sheet prints one code per table, big, with the table number in plain text as a fallback."],
+          ["3","Tunnel status visible before doors open. If this is red, you're handing out paper. <span class='ref'>Scope 7</span>"]
+        ]
+      }
+    ]
+  },
+
+  big: {
+    label: "Big screen",
+    frame: "wide",
+    states: [
+      {
+        label: "1 · Doors open",
+        html: `
+          <div class="wf-label">Trivia night</div>
+          <h2 class="jumbo">Scan the code on your table</h2>
+          <p class="wf-p">One code per table. Everyone can scan it — you'll answer as a team.</p>
+          <div class="qrgrid">${Array.from({length:5},(_,i)=>`<div class="qr">T${i+1}</div>`).join("")}</div>
+          <div class="meta" style="margin-top:11px"><span class="pin">1</span>Codes live on the tables, not up here — this is the instruction, not the code.</div>`,
+        notes: [
+          ["1","Projecting one shared code would break team identity entirely. The table's code is on the table."],
+          ["2","Print the table number in large type beside each code, so people can confirm they scanned their own."]
+        ]
+      },
+      {
+        label: "2 · Question live",
+        html: `
+          <div class="row"><div class="wf-label">Round 1 · Question 4</div><div class="wf-label">23 / 30 answered</div></div>
+          <div class="rule"></div>
+          <h2 class="jumbo">Which Australian city hosted the 2000 Olympics?</h2>
+          <div class="row" style="gap:9px;margin-top:16px">
+            <div class="box" style="flex:1">A · Melbourne</div>
+            <div class="box" style="flex:1">B · Sydney</div>
+          </div>
+          <div class="row" style="gap:9px">
+            <div class="box" style="flex:1">C · Brisbane</div>
+            <div class="box" style="flex:1">D · Perth</div>
+          </div>
+          <div class="meta" style="margin-top:14px"><span class="pin">2</span>Answer count only — never which table picked what.</div>`,
+        notes: [
+          ["1","Readable from the back of the room. Question type sets the layout: choice shows options, free text shows the prompt alone."],
+          ["2","Progress count nudges slow tables without exposing anyone's answer."],
+          ["3","When a question has AV, this screen holds the video and the phones stay on the answer view."]
+        ]
+      },
+      {
+        label: "3 · Leaderboard",
+        html: `
+          <div class="wf-label">After round 1</div>
+          <h2 class="jumbo">Leaderboard</h2>
+          <div class="lb-row"><span><span class="n">1</span>Quizteama Aguilera</span><span>9</span></div>
+          <div class="lb-row"><span><span class="n">2</span>Table 4</span><span>8</span></div>
+          <div class="lb-row"><span><span class="n">3</span>Table 12</span><span>7</span></div>
+          <div class="lb-row"><span><span class="n">4</span>The Quizzards</span><span>7</span></div>
+          <div class="lb-row"><span><span class="n">5</span>Table 18</span><span>6</span></div>
+          <div class="meta" style="margin-top:12px"><span class="pin">2</span>Round 2 begins in 5:00</div>`,
+        notes: [
+          ["1","Doubles as the marking window — the room reads the board while free text is judged."],
+          ["2","A visible countdown gets people back in their seats better than an announcement does."],
+          ["3","Show the top handful, not all 30. Nobody wants their table read out last. <span class='ref'>Scope 3.5</span>"]
+        ]
+      }
+    ]
+  }
+};
+
+let dev = "player", idx = 0;
+const $devices = document.getElementById("devices");
+const $steps = document.getElementById("steps");
+const $stage = document.getElementById("stage");
+const $notes = document.getElementById("notes");
+
+function render(){
+  $devices.innerHTML = "";
+  Object.keys(S).forEach(k=>{
+    const b = document.createElement("button");
+    b.textContent = S[k].label;
+    b.setAttribute("role","tab");
+    b.setAttribute("aria-selected", k===dev);
+    b.onclick = ()=>{ dev=k; idx=0; render(); };
+    $devices.appendChild(b);
+  });
+
+  const d = S[dev], st = d.states[idx];
+
+  $steps.innerHTML = "";
+  d.states.forEach((s,i)=>{
+    const b = document.createElement("button");
+    b.className = "step";
+    b.textContent = s.label;
+    b.setAttribute("aria-selected", i===idx);
+    b.onclick = ()=>{ idx=i; render(); };
+    $steps.appendChild(b);
+  });
+
+  $stage.innerHTML = `
+    <div class="device ${d.frame}">
+      <span class="tag">${d.label}</span>
+      ${d.frame==="phone" ? '<div class="notch"></div>' : ''}
+      <div class="screen">${st.html}</div>
+    </div>`;
+
+  $notes.innerHTML = st.notes.map(n=>
+    `<div class="note"><span class="pin">${n[0]}</span><span>${n[1]}</span></div>`
+  ).join("");
+}
+render();
+</script>
+</body>
+</html>

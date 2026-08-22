@@ -1,0 +1,153 @@
+// Floor: walks the room with a phone, held at chest height. Never sees
+// correct answers — that screen is readable over a shoulder in a crowded
+// room (technical-design §13.2). Every floor action is logged with a
+// reason and appears in the admin audit log.
+import { readOpsSession } from '../opsSession.js';
+import { makeAuditLogger } from '../audit.js';
+
+export function registerFloorRoutes(app, { db, q }) {
+  const logAudit = makeAuditLogger(db);
+  const getTeamsWithStatus = db.prepare(`
+    SELECT t.id AS team_id, t.table_number, t.team_name, t.captain_player_id,
+           (SELECT COUNT(*) FROM players p WHERE p.team_id = t.id) AS player_count,
+           (SELECT username FROM players p WHERE p.id = t.captain_player_id) AS captain_name
+    FROM teams t WHERE t.event_id = ? AND t.archived = 0
+    ORDER BY t.table_number
+  `);
+  const getTeamPlayers = db.prepare('SELECT id, username FROM players WHERE team_id = ? ORDER BY username');
+  const setTeamName = db.prepare('UPDATE teams SET team_name = ? WHERE id = ?');
+  const setCaptain = db.prepare('UPDATE teams SET captain_player_id = ? WHERE id = ?');
+
+  function requireFloor(req, reply) {
+    const ops = readOpsSession(req);
+    if (!ops || ops.role !== 'floor') {
+      reply.code(403).send({ error: 'forbidden' });
+      return null;
+    }
+    const event = q.getEventById.get(ops.eventId);
+    if (!event || event.status !== 'active') {
+      reply.code(409).send({ error: 'event_not_running' });
+      return null;
+    }
+    return { ops, event };
+  }
+
+  app.get('/floor/teams', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    return { teams: getTeamsWithStatus.all(ctx.event.id) };
+  });
+
+  app.get('/floor/team/:id', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    const team = q.getTeamById.get(Number(req.params.id));
+    if (!team || team.event_id !== ctx.event.id) return reply.code(404).send({ error: 'not_found' });
+
+    const es = q.getEventState.get(ctx.event.id);
+    const current = es.current_question_id ? q.getQuestionById.get(es.current_question_id) : null;
+    const ourAnswer = current ? q.getAnswer.get(team.id, current.id) : null;
+
+    return {
+      team: {
+        id: team.id, table_number: team.table_number, team_name: team.team_name,
+        token: team.token, captain_player_id: team.captain_player_id
+      },
+      players: getTeamPlayers.all(team.id),
+      // No correct_answer, no aliases — floor never sees them (§13.2).
+      current_question: current ? {
+        id: current.id, prompt: current.prompt, type: current.type,
+        options: current.options ? JSON.parse(current.options) : null,
+        state: es.question_status
+      } : null,
+      our_answer: ourAnswer ? { value: ourAnswer.value } : null
+    };
+  });
+
+  app.post('/floor/rename', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    const teamId = Number(req.body?.team_id);
+    const teamName = String(req.body?.team_name || '').trim().slice(0, 32);
+    const team = q.getTeamById.get(teamId);
+    if (!team || team.event_id !== ctx.event.id) return reply.code(404).send({ error: 'not_found' });
+
+    db.transaction(() => {
+      setTeamName.run(teamName || null, teamId);
+      q.bumpTableVersion.run(teamId);
+      logAudit({
+        eventId: ctx.event.id, role: 'floor', operator: ctx.ops.name, action: 'renameTeam',
+        target: `team:${teamId}`, reason: teamName
+      });
+    })();
+    return { ok: true };
+  });
+
+  app.post('/floor/reassign-captain', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    const teamId = Number(req.body?.team_id);
+    const playerId = Number(req.body?.player_id);
+    const team = q.getTeamById.get(teamId);
+    if (!team || team.event_id !== ctx.event.id) return reply.code(404).send({ error: 'not_found' });
+    const player = q.getPlayerById.get(playerId);
+    if (!player || player.team_id !== teamId) return reply.code(400).send({ error: 'unknown_player' });
+
+    db.transaction(() => {
+      setCaptain.run(playerId, teamId);
+      q.bumpTableVersion.run(teamId);
+      logAudit({
+        eventId: ctx.event.id, role: 'floor', operator: ctx.ops.name, action: 'reassignCaptain',
+        target: `team:${teamId}`, reason: `now ${player.username}`
+      });
+    })();
+    return { ok: true };
+  });
+
+  app.post('/floor/answer-on-behalf', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    const { event } = ctx;
+
+    const teamId = Number(req.body?.team_id);
+    const questionId = Number(req.body?.question_id);
+    const team = q.getTeamById.get(teamId);
+    if (!team || team.event_id !== event.id) return reply.code(400).send({ error: 'unknown_team' });
+
+    const current = q.getCurrentQuestion.get(event.id);
+    if (!current || current.question_id !== questionId || current.question_status !== 'OPEN') {
+      return reply.code(409).send({ error: 'question_not_open' });
+    }
+
+    const value = String(req.body?.value ?? '').slice(0, 200);
+    if (current.type === 'mcq') {
+      const options = current.options ? JSON.parse(current.options) : [];
+      if (!options.includes(value)) return reply.code(400).send({ error: 'invalid_option' });
+    } else if (!value) {
+      return reply.code(400).send({ error: 'value_required' });
+    }
+
+    // Floor dictates on the table's behalf, so scoring stays hidden from
+    // them too — the value goes in, matching is still resolved server-side.
+    let isCorrect = null;
+    if (current.type === 'mcq') {
+      isCorrect = value === current.correct_answer ? 1 : 0;
+    } else {
+      const normalize = (s) => String(s || '').trim().toLowerCase();
+      const aliases = current.aliases ? JSON.parse(current.aliases) : [];
+      const accepted = new Set([normalize(current.correct_answer), ...aliases.map(normalize)]);
+      isCorrect = accepted.has(normalize(value)) ? 1 : null;
+    }
+
+    db.transaction(() => {
+      q.upsertAnswer.run(event.id, teamId, questionId, value, null, new Date().toISOString(), isCorrect);
+      q.bumpTableVersion.run(teamId);
+      logAudit({
+        eventId: event.id, role: 'floor', operator: ctx.ops.name, action: 'answerOnBehalf',
+        target: `question:${questionId} team:${teamId}`, reason: value
+      });
+    })();
+
+    return { ok: true };
+  });
+}

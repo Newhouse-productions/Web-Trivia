@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia night — interactive prototype</title>
+<style>
+:root{
+  --paper:#E6E9EC;--card:#F7F8F9;--ink:#191C1F;--muted:#8A9299;--fill:#D2D7DB;
+  --line:#B4BBC1;--pin:#2F5FE0;--warn:#B4571F;--ok:#2C6E49;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--pin);outline-offset:2px}
+
+header{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+h1{font-size:14px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:11px;margin-top:3px}
+
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:#EFF1F3}
+.toggle{display:flex;align-items:center;gap:6px;font-size:11px;color:#4A5157}
+.toggle input{accent-color:var(--pin)}
+.mini{border:1px solid var(--line);background:#fff;border-radius:3px;padding:4px 9px;font-size:11px;color:#4A5157}
+.ver{font-size:11px;color:var(--muted);margin-left:auto}
+
+.tabs{display:flex;gap:6px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.tab{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:2px;padding:6px 11px;font-size:11px;white-space:nowrap}
+.tab[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+@media(min-width:1000px){.tabs{display:none}}
+
+main{padding:14px 16px 60px;max-width:1400px;margin:0 auto;display:grid;gap:16px}
+@media(min-width:1000px){
+  main{grid-template-columns:1fr 300px 300px;align-items:start}
+  .panel{display:block !important}
+}
+.panel{min-width:0}
+
+.frame{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:10px;position:relative}
+.frame.phone{border-radius:20px;max-width:300px;margin:0 auto}
+.tag{position:absolute;top:-9px;left:12px;background:var(--paper);padding:0 6px;font-size:9.5px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.view{background:#fff;border:1px solid var(--line);min-height:340px;padding:13px;overflow:hidden}
+.phone .view{border-radius:12px;min-height:400px}
+.notch{width:48px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 8px}
+
+.lbl{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.h{font-family:var(--sans);font-size:15px;font-weight:600;line-height:1.3;margin:0 0 9px;color:#2E3439}
+.p{font-family:var(--sans);font-size:12px;color:#6A7278;margin:0 0 9px}
+.rule{height:1px;background:var(--line);margin:11px 0}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.meta{font-size:10px;color:var(--muted);margin-top:7px}
+.warn{color:var(--warn)}
+.ok{color:var(--ok)}
+
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:3px;padding:10px 11px;margin-bottom:6px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff}
+.opt.sel{border:2px solid var(--ink);background:#F0F2F3;font-weight:600;color:var(--ink);padding:9px 10px}
+.opt:disabled{opacity:.55;cursor:default}
+.inp{width:100%;border:1px solid var(--line);border-radius:3px;padding:10px;font-family:var(--sans);font-size:12.5px;margin-bottom:6px}
+.btn{width:100%;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:3px;padding:10px;font-family:var(--sans);font-size:12.5px;font-weight:600;margin-bottom:6px}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn:disabled{background:var(--fill);border-color:var(--fill);color:#fff;cursor:default}
+.btn.sm{width:auto;padding:6px 11px;font-size:11.5px;margin:0}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.btnrow>*{flex:1;min-width:74px}
+
+.pill{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:2px 9px;font-size:10px;color:var(--muted);margin:0 3px 3px 0}
+.pill.on{border-color:var(--ink);color:var(--ink);font-weight:600}
+.pill.warnp{border-color:var(--warn);color:var(--warn)}
+
+.grid30{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;margin-top:6px}
+.cell{aspect-ratio:1;border:1px solid var(--line);border-radius:2px;font-size:7.5px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.cell.in{background:var(--fill);border-color:var(--fill)}
+.cell.us{border-color:var(--pin);color:var(--pin);font-weight:700}
+
+.stale{background:#FBF0E8;border:1px solid #E0BFA4;border-radius:3px;padding:7px 9px;font-size:10.5px;color:var(--warn);margin-bottom:8px}
+.imgph{border:1px solid var(--line);border-radius:3px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;background:repeating-linear-gradient(45deg,#F2F4F5 0 8px,#fff 8px 16px);margin-bottom:8px}
+.vid{border:1px solid var(--line);border-radius:3px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;background:#F2F4F5;margin-bottom:6px}
+.lbrow{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-family:var(--sans);font-size:12px;color:#4A5157}
+.lbrow.us{font-weight:700;color:var(--ink)}
+.lbrow .n{color:var(--muted);width:20px;display:inline-block;font-family:var(--mono);font-size:10px}
+.jumbo{font-family:var(--sans);font-size:19px;font-weight:700;line-height:1.25;color:#2E3439;margin:0 0 12px}
+.log{font-size:10px;color:var(--muted);max-height:120px;overflow:auto;border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+.log div{margin-bottom:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trivia night — interactive prototype</h1>
+  <div class="sub">Captain plus one follower on table 12, one host, one big screen. All linked. No backend.</div>
+</header>
+
+<div class="controls">
+  <label class="toggle"><input type="checkbox" id="pollToggle" checked> Simulate 3s polling</label>
+  <button class="mini" id="reset">Reset</button>
+  <span class="ver" id="ver">v0</span>
+</div>
+
+<div class="tabs" id="tabs"></div>
+
+<main>
+  <div class="panel" data-panel="host"><div class="frame"><span class="tag">Host console</span><div class="view" id="host"></div></div></div>
+  <div class="panel" data-panel="p1"><div class="frame phone"><span class="tag" id="t1">Priya</span><div class="notch"></div><div class="view" id="p1"></div></div></div>
+  <div class="panel" data-panel="p2"><div class="frame phone"><span class="tag" id="t2">Marcus</span><div class="notch"></div><div class="view" id="p2"></div></div></div>
+  <div class="panel" data-panel="screen"><div class="frame"><span class="tag">Big screen</span><div class="view" id="screen"></div></div></div>
+</main>
+
+<script>
+// ---------- content ----------
+const QUESTIONS = [
+  { round:1, n:1, type:"mcq", points:1,
+    prompt:"Which Australian city hosted the 2000 Olympics?",
+    options:["Melbourne","Sydney","Brisbane","Perth"], answer:"Sydney" },
+  { round:1, n:2, type:"text", points:2,
+    prompt:"Who wrote Great Expectations?",
+    answer:"Charles Dickens", aliases:["charles dickens","dickens","c dickens"] },
+  { round:1, n:3, type:"mcq", points:2, image:true,
+    prompt:"Which building is this?",
+    options:["Flinders Street","Sydney Opera House","Parliament House","MCG"], answer:"Sydney Opera House" },
+  { round:1, n:4, type:"text", points:1, video:true,
+    prompt:"Name the film this score is from.",
+    answer:"Jurassic Park", aliases:["jurassic park"] }
+];
+const OTHER_TABLES = 29;
+
+// ---------- server state ----------
+let S, phones;
+function reset(){
+  S = {
+    version: 1,
+    qi: 0,
+    qState: "PENDING",          // PENDING OPEN CLOSED MARKED REVEALED
+    answers: {},                // qi -> {value, firstBy, firstAt, lastBy, lastAt}
+    marks: {},                  // qi -> true/false (our table)
+    others: 0,                  // simulated other tables answered
+    bonuses: [],
+    captain: "p1",
+    score: 0,
+    log: []
+  };
+  phones = {
+    p1: { me:"Priya", seen:1, snap:null, draft:"", lastSync:Date.now() },
+    p2: { me:"Marcus", seen:1, snap:null, draft:"", lastSync:Date.now() }
+  };
+  syncAll(true);
+  renderAll();
+}
+function bump(msg){
+  S.version++;
+  if(msg) S.log.unshift(`v${S.version} · ${msg}`);
+  if(S.log.length>30) S.log.pop();
+  if(!polling()) renderAll(); else renderAll();
+}
+const q = () => QUESTIONS[S.qi];
+const polling = () => document.getElementById("pollToggle").checked;
+
+// ---------- score ----------
+function totalScore(){
+  let t=0;
+  Object.keys(S.marks).forEach(k=>{ if(S.marks[k]) t += QUESTIONS[k].points; });
+  S.bonuses.forEach(b=> t += b.points);
+  return t;
+}
+
+// ---------- snapshot (what a phone is allowed to see) ----------
+function snapshot(){
+  const Q = q();
+  const a = S.answers[S.qi];
+  const revealed = S.qState==="REVEALED";
+  return {
+    version: S.version,
+    qState: S.qState,
+    round: Q.round, n: Q.n, points: Q.points, type: Q.type,
+    prompt: S.qState==="PENDING" ? null : Q.prompt,
+    options: S.qState==="PENDING" ? null : (Q.options||null),
+    image: (Q.image && S.qState!=="PENDING") || false,
+    // allowlist: answer only after reveal
+    answer: revealed ? Q.answer : null,
+    marked: revealed ? !!S.marks[S.qi] : null,
+    video: revealed && Q.video ? true : false,
+    ours: a ? {...a} : null,
+    captain: S.captain,
+    score: totalScore(),
+    lastBonus: S.bonuses.length ? S.bonuses[S.bonuses.length-1] : null
+  };
+}
+function syncAll(force){
+  Object.values(phones).forEach(p=>{ p.snap = snapshot(); p.seen = S.version; p.lastSync = Date.now(); });
+}
+function syncOne(k){
+  const p = phones[k];
+  p.snap = snapshot(); p.seen = S.version; p.lastSync = Date.now();
+  renderAll();
+}
+
+// ---------- host actions (absolute commands) ----------
+function setState(target){
+  const Q = q();
+  if(target==="OPEN"){ S.qState="OPEN"; S.others=0; tickOthers(); bump(`Q${Q.n} → OPEN`); }
+  else if(target==="CLOSED"){
+    S.qState="CLOSED";
+    if(Q.type==="mcq"){ autoMark(); S.qState="MARKED"; bump(`Q${Q.n} → CLOSED, auto-marked`); }
+    else bump(`Q${Q.n} → CLOSED, awaiting marking`);
+  }
+  else if(target==="REVEALED"){ S.qState="REVEALED"; bump(`Q${Q.n} → REVEALED`); }
+  else { S.qState=target; bump(`Q${Q.n} → ${target}`); }
+}
+function autoMark(){
+  const Q=q(), a=S.answers[S.qi];
+  S.marks[S.qi] = !!(a && a.value===Q.answer);
+}
+function markAs(correct){
+  S.marks[S.qi]=correct; S.qState="MARKED";
+  bump(`Q${q().n} marked ${correct?"correct":"wrong"}`);
+}
+function gotoQuestion(i){
+  if(i<0||i>=QUESTIONS.length) return;
+  S.qi=i; S.qState="PENDING"; S.others=0;
+  Object.values(phones).forEach(p=>p.draft="");
+  bump(`Jumped to Q${QUESTIONS[i].n}`);
+}
+function awardBonus(pts){
+  S.bonuses.push({points:pts, reason:"good heckle", by:"Host", at:Date.now()});
+  bump(`Bonus +${pts} to table 12`);
+}
+let othersTimer=null;
+function tickOthers(){
+  clearInterval(othersTimer);
+  othersTimer = setInterval(()=>{
+    if(S.qState!=="OPEN"){ clearInterval(othersTimer); return; }
+    if(S.others < OTHER_TABLES){ S.others += Math.min(OTHER_TABLES-S.others, 1+Math.floor(Math.random()*3)); renderAll(); }
+    else clearInterval(othersTimer);
+  }, 900);
+}
+
+// ---------- player action ----------
+function takeover(pk){
+  const p = phones[pk];
+  if(S.captain===pk) return;
+  const was = phones[S.captain].me;
+  S.captain = pk;
+  bump(`${p.me} took over as captain from ${was}`);
+  p.snap = snapshot(); p.seen = S.version; p.lastSync=Date.now();
+  renderAll();
+}
+function submit(pk, value){
+  const p = phones[pk];
+  // server-side guards: captain only, and only while OPEN
+  if(pk !== S.captain || S.qState!=="OPEN"){ p.snap = snapshot(); p.seen=S.version; renderAll(); return; }
+  const t = new Date().toTimeString().slice(0,8);
+  S.answers[S.qi] = { value, by:p.me, at:t };
+  bump(`${p.me} answered "${value}"`);
+  // the submitting phone always gets fresh state back
+  p.snap = snapshot(); p.seen = S.version; p.lastSync=Date.now();
+  renderAll();
+}
+
+// ---------- polling loop ----------
+setInterval(()=>{
+  if(!polling()) return;
+  Object.keys(phones).forEach(k=>{
+    const p=phones[k];
+    if(p.seen !== S.version){ p.snap = snapshot(); p.seen = S.version; }
+    p.lastSync = Date.now();
+  });
+  renderAll();
+}, 3000);
+setInterval(()=>{ if(polling()) renderAll(); }, 1000);
+
+// ---------- rendering ----------
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+function renderHost(){
+  const Q=q(), a=S.answers[S.qi], answered = S.others + (a?1:0);
+  const canReveal = S.qState==="MARKED";
+  const needsMark = S.qState==="CLOSED" && Q.type==="text";
+  let marking="";
+  if(needsMark){
+    marking = `
+      <div class="rule"></div>
+      <div class="lbl">Marking · accepting: ${Q.aliases.join(" · ")}</div>
+      <div class="row" style="margin-bottom:6px"><span style="font-family:var(--sans)">Table 12 — <strong>${a? esc(a.value):"<em>no answer</em>"}</strong></span></div>
+      <div class="btnrow">
+        <button class="btn sm" onclick="markAs(true)">Correct</button>
+        <button class="btn sm ghost" onclick="markAs(false)">Wrong</button>
+      </div>
+      <div class="meta">29 other tables auto-matched against aliases.</div>`;
+  }
+  return `
+    <div class="row"><div class="lbl">Round ${Q.round} · Q${Q.n} of ${QUESTIONS.length} · ${Q.points} pt${Q.points>1?"s":""}</div>
+      <div class="lbl">${S.qState}</div></div>
+    <div class="rule"></div>
+    <h2 class="h">${esc(Q.prompt)}</h2>
+    <p class="p">Answer: <strong>${esc(Q.answer)}</strong> · ${Q.type==="mcq"?"multiple choice":"free text"}${Q.image?" · image":""}${Q.video?" · AV cue":""}</p>
+    <div class="btnrow">
+      <button class="btn sm ghost" onclick="setState('OPEN')" ${S.qState==="OPEN"?"disabled":""}>Open</button>
+      <button class="btn sm ghost" onclick="setState('CLOSED')" ${S.qState!=="OPEN"?"disabled":""}>Close</button>
+      <button class="btn sm" onclick="setState('REVEALED')" ${!canReveal?"disabled":""}>Reveal</button>
+    </div>
+    <div class="btnrow">
+      <button class="btn sm ghost" onclick="gotoQuestion(${S.qi-1})" ${S.qi===0?"disabled":""}>← Prev</button>
+      <button class="btn sm ghost" onclick="gotoQuestion(${S.qi+1})" ${S.qi===QUESTIONS.length-1?"disabled":""}>Next →</button>
+      <button class="btn sm ghost" onclick="awardBonus(1)">Bonus +1</button>
+    </div>
+    ${marking}
+    <div class="rule"></div>
+    <div class="row"><span class="lbl" style="margin:0">Tables answered</span><span class="lbl" style="margin:0">${answered} / 30</span></div>
+    <div class="grid30">${Array.from({length:30},(_,i)=>{
+      const isUs = i===11;
+      const filled = isUs ? !!a : i < S.others + (i>11?0:0);
+      return `<div class="cell ${filled?"in":""} ${isUs?"us":""}">${i+1}</div>`;
+    }).join("")}</div>
+    <div class="log">${S.log.map(l=>`<div>${esc(l)}</div>`).join("")}</div>`;
+}
+
+function renderPhone(k){
+  const p = phones[k], s = p.snap;
+  if(!s) return "";
+  const stale = polling() && p.seen !== S.version;
+  const age = Math.round((Date.now()-p.lastSync)/1000);
+  const isCap = s.captain === k;
+  let head = `<div class="row"><div class="lbl">Table 12 · The Quizzards</div><div class="lbl">${p.me}${isCap?" · captain":""}</div></div>`;
+  let banner = stale ? `<div class="stale">Out of date — the room has moved on. <button class="mini" onclick="syncOne('${k}')">Sync now</button></div>` : "";
+  if(!stale && age>=6) banner = `<div class="stale">Last updated ${age}s ago. <button class="mini" onclick="syncOne('${k}')">Sync now</button></div>`;
+
+  let body = "";
+  if(s.qState==="PENDING"){
+    body = `<div style="padding:50px 0;text-align:center">
+      <h2 class="h" style="margin-bottom:4px">Question ${s.n} coming up</h2>
+      <p class="p">Eyes on the screen.</p></div>`;
+  } else {
+    const ours = s.ours;
+    const locked = s.qState!=="OPEN" || !isCap;
+    body += `<div class="row"><div class="lbl">Q${s.n} · ${s.points} pt${s.points>1?"s":""}</div><div class="lbl">${locked?"Locked":"Open"}</div></div>`;
+    body += `<h2 class="h">${esc(s.prompt)}</h2>`;
+    if(s.image) body += `<div class="imgph">image</div>`;
+    if(s.type==="mcq"){
+      body += s.options.map(o=>`<button class="opt ${ours&&ours.value===o?"sel":""}" ${locked?"disabled":""} onclick="submit('${k}','${o.replace(/'/g,"\\'")}')">${esc(o)}</button>`).join("");
+    } else if(!locked){
+      body += `<input class="inp" placeholder="Type your answer" value="${esc(p.draft)}" oninput="phones['${k}'].draft=this.value">`;
+      body += `<button class="btn" onclick="submitDraft('${k}')">Submit answer</button>`;
+    } else if(ours){
+      body += `<div class="opt sel">${esc(ours.value)}</div>`;
+    } else {
+      body += `<div class="opt" style="color:var(--muted)">No answer</div>`;
+    }
+    if(ours){
+      body += `<div class="meta">${isCap?"Answer submitted":"Your table answered"} <strong>${esc(ours.value)}</strong> — ${esc(ours.by)}, ${ours.at}</div>`;
+    }
+    if(!isCap && s.qState==="OPEN"){
+      body += `<div class="meta">${esc(phones[s.captain].me)} is answering for your table.</div>`;
+      body += `<button class="btn ghost" style="margin-top:8px" onclick="takeover('${k}')">Take over as captain</button>`;
+      body += `<div class="meta">Use this if their phone dies.</div>`;
+    }
+    if(s.qState==="CLOSED") body += `<div class="meta">Closed. Waiting on marking.</div>`;
+    if(s.qState==="REVEALED"){
+      body += `<div class="rule"></div><div class="lbl">Correct answer</div>
+        <p class="p" style="font-size:14px;font-weight:600;color:#2E3439">${esc(s.answer)}</p>
+        <div class="meta ${s.marked?"ok":"warn"}">${s.marked?`Correct · +${s.points}`:"Not this time"}</div>`;
+      if(s.video) body += `<div class="rule"></div><div class="lbl">Watch it again</div><div class="vid">▶ embedded video</div><div class="meta">Unlocked now the answer is out.</div>`;
+    }
+  }
+  const bonusNote = s.lastBonus ? `<div class="meta ok">Bonus +${s.lastBonus.points} — ${esc(s.lastBonus.reason)}</div>` : "";
+  return head + banner + body + `<div class="rule"></div><div class="row"><span class="meta">Score ${s.score}</span><span class="meta">v${s.version}</span></div>${bonusNote}`;
+}
+function submitDraft(k){
+  if(S.captain!==k) return;
+  const v = (phones[k].draft||"").trim();
+  if(!v) return;
+  submit(k, v);
+  phones[k].draft="";
+}
+
+function renderScreen(){
+  const Q=q(), a=S.answers[S.qi], answered=S.others+(a?1:0);
+  if(S.qState==="PENDING")
+    return `<div class="lbl">Round ${Q.round}</div><h2 class="jumbo">Question ${Q.n}</h2><p class="p">Coming up.</p>`;
+  if(S.qState==="REVEALED"){
+    const sc = totalScore();
+    return `<div class="lbl">Q${Q.n} · answer</div><h2 class="jumbo">${esc(Q.answer)}</h2>
+      <div class="rule"></div><div class="lbl">Leaderboard</div>
+      <div class="lbrow"><span><span class="n">1</span>Quizteama Aguilera</span><span>${sc+2}</span></div>
+      <div class="lbrow us"><span><span class="n">2</span>The Quizzards</span><span>${sc}</span></div>
+      <div class="lbrow"><span><span class="n">3</span>Table 4</span><span>${Math.max(0,sc-1)}</span></div>`;
+  }
+  let opts = "";
+  if(Q.type==="mcq") opts = `<div style="display:flex;gap:7px;flex-wrap:wrap">${Q.options.map(o=>`<div class="opt" style="flex:1;min-width:110px">${esc(o)}</div>`).join("")}</div>`;
+  return `<div class="row"><div class="lbl">Round ${Q.round} · Q${Q.n}</div><div class="lbl">${answered} / 30 answered</div></div>
+    <h2 class="jumbo">${esc(Q.prompt)}</h2>
+    ${Q.image?`<div class="imgph" style="max-width:260px">image</div>`:""}
+    ${opts}
+    ${S.qState==="CLOSED"?`<div class="meta">Answers closed.</div>`:""}`;
+}
+
+function renderAll(){
+  document.getElementById("host").innerHTML = renderHost();
+  document.getElementById("p1").innerHTML = renderPhone("p1");
+  document.getElementById("p2").innerHTML = renderPhone("p2");
+  document.getElementById("screen").innerHTML = renderScreen();
+  document.getElementById("ver").textContent = "v"+S.version;
+  document.getElementById("t1").textContent = "Priya" + (S.captain==="p1"?" · captain":"");
+  document.getElementById("t2").textContent = "Marcus" + (S.captain==="p2"?" · captain":"");
+}
+
+// ---------- tabs for narrow screens ----------
+const PANELS=[["host","Host"],["p1","Priya"],["p2","Marcus"],["screen","Big screen"]];
+let active="host";
+function renderTabs(){
+  const t=document.getElementById("tabs"); t.innerHTML="";
+  PANELS.forEach(([k,label])=>{
+    const b=document.createElement("button");
+    b.className="tab"; b.textContent=label;
+    b.setAttribute("aria-selected", k===active);
+    b.onclick=()=>{active=k;applyPanels();};
+    t.appendChild(b);
+  });
+}
+function applyPanels(){
+  const wide = window.matchMedia("(min-width:1000px)").matches;
+  document.querySelectorAll(".panel").forEach(p=>{
+    p.style.display = wide ? "block" : (p.dataset.panel===active ? "block" : "none");
+  });
+  renderTabs();
+}
+window.addEventListener("resize", applyPanels);
+document.getElementById("reset").onclick = reset;
+document.getElementById("pollToggle").onchange = ()=>{ if(!polling()) syncAll(); renderAll(); };
+
+reset();
+applyPanels();
+</script>
+</body>
+</html>

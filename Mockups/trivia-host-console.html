@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Host console — wireframes</title>
+<style>
+:root{
+  --paper:#E6E9EC;
+  --card:#F7F8F9;
+  --ink:#191C1F;
+  --muted:#8A9299;
+  --fill:#D2D7DB;
+  --line:#B4BBC1;
+  --pin:#2F5FE0;
+  --warn:#B4571F;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+header{padding:20px 18px 14px;border-bottom:1px solid var(--line)}
+h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-0.01em}
+.sub{color:var(--muted);font-size:11.5px;margin-top:4px}
+.steps{display:flex;gap:6px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch}
+.step{font-family:var(--mono);font-size:11.5px;padding:6px 11px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:2px;cursor:pointer;white-space:nowrap}
+.step[aria-selected="true"]{border-color:var(--ink);color:var(--ink);background:var(--card)}
+.step:focus-visible{outline:2px solid var(--pin);outline-offset:2px}
+
+main{padding:16px 18px 60px;display:grid;gap:20px;max-width:1240px;margin:0 auto}
+@media(min-width:960px){main{grid-template-columns:minmax(0,1fr) 290px;align-items:start}}
+
+.device{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:11px;position:relative}
+.tag{position:absolute;top:-9px;left:12px;background:var(--paper);padding:0 6px;font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase}
+.screen{background:#fff;border:1px solid var(--line);min-height:420px;overflow:hidden}
+
+/* persistent vitals strip */
+.vitals{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--line);background:#FBFBFC}
+.vital{padding:8px 12px;border-right:1px solid var(--line);flex:1;min-width:88px}
+.vital .k{font-size:9px;letter-spacing:0.09em;text-transform:uppercase;color:var(--muted)}
+.vital .v{font-family:var(--sans);font-size:13px;font-weight:600;color:#3A4046;margin-top:1px}
+.vital .v.warn{color:var(--warn)}
+.body{padding:14px}
+
+.wf-label{font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.wf-h{font-family:var(--sans);font-size:17px;font-weight:600;line-height:1.3;margin:0 0 9px;color:#3A4046}
+.wf-p{font-family:var(--sans);font-size:12.5px;color:#6A7278;margin:0 0 10px}
+.rule{height:1px;background:var(--line);margin:13px 0}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.cols{display:flex;gap:14px;flex-wrap:wrap}
+.cols>*{flex:1;min-width:210px}
+
+.box{border:1px solid var(--line);border-radius:3px;padding:10px 11px;margin-bottom:7px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff}
+.box.dash{border-style:dashed;color:var(--muted)}
+.box.flag{border-left:3px solid var(--warn)}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:3px;padding:11px 12px;text-align:center;font-family:var(--sans);font-size:12.5px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.off{background:var(--fill);border-color:var(--fill);color:#fff}
+.btn.warn{background:#fff;color:var(--warn);border-color:var(--warn)}
+.btnrow{display:flex;gap:7px;margin:12px 0}
+.btnrow>*{flex:1}
+kbd{font-family:var(--mono);font-size:9.5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:1px 4px;color:var(--muted);background:#FBFBFC;margin-left:5px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--muted);margin:0 4px 4px 0}
+.pill.on{border-color:var(--ink);color:var(--ink);font-weight:600}
+.meta{font-size:10.5px;color:var(--muted);margin-top:8px}
+.cue{border:1px dashed var(--line);border-radius:3px;padding:9px 11px;font-family:var(--sans);font-size:12px;color:#5C646A;background:#FBFBFC;margin-bottom:9px}
+
+.grid30{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin-top:8px}
+@media(max-width:560px){.grid30{grid-template-columns:repeat(6,1fr)}}
+.cell{aspect-ratio:1;border:1px solid var(--line);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:8.5px;color:var(--muted)}
+.cell.in{background:var(--fill);border-color:var(--fill);color:#5C646A}
+.cell.out{border-color:var(--warn);color:var(--warn)}
+
+.lb-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-family:var(--sans);font-size:12.5px;color:#4A5157}
+.lb-row .n{color:var(--muted);width:22px;display:inline-block;font-family:var(--mono);font-size:11px}
+
+.pin{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--pin);color:#fff;font-size:9.5px;font-weight:600;flex:none;margin-right:6px}
+aside{border-top:1px solid var(--line);padding-top:14px}
+@media(min-width:960px){aside{border-top:none;border-left:1px solid var(--line);padding:0 0 0 20px}}
+.aside-h{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+.note{display:flex;margin-bottom:12px;font-size:12px;line-height:1.5;color:#3E454B}
+.ref{color:var(--pin);font-size:10.5px}
+footer{padding:0 18px 40px;max-width:1240px;margin:0 auto;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Host console — wireframes</h1>
+  <div class="sub">v0.2 · run of show · 30 tables · 3 rounds × 10</div>
+</header>
+
+<div class="steps" id="steps"></div>
+
+<main>
+  <div id="stage"></div>
+  <aside>
+    <div class="aside-h">Notes on this screen</div>
+    <div id="notes"></div>
+  </aside>
+</main>
+
+<footer>The console is used standing, in low light, with a room waiting. Everything here is sized for that.</footer>
+
+<script>
+const vitals = (over) => {
+  const v = Object.assign({
+    round:"1 of 3", q:"4 of 10", marking:"1 of 3 marked", tables:"30 / 30 live",
+    link:"Connected", clock:"8:42pm"
+  }, over||{});
+  return `<div class="vitals">
+    <div class="vital"><div class="k">Round</div><div class="v">${v.round}</div></div>
+    <div class="vital"><div class="k">Question</div><div class="v">${v.q}</div></div>
+    <div class="vital"><div class="k">Marking</div><div class="v ${v.markWarn?'warn':''}">${v.marking}</div></div>
+    <div class="vital"><div class="k">Tables</div><div class="v ${v.tablesWarn?'warn':''}">${v.tables}</div></div>
+    <div class="vital"><div class="k">Link</div><div class="v ${v.linkWarn?'warn':''}">${v.link}</div></div>
+    <div class="vital"><div class="k">Time</div><div class="v">${v.clock}</div></div>
+  </div>`;
+};
+
+const grid = (n, out=[]) => `<div class="grid30">${
+  Array.from({length:30},(_,i)=>{
+    const t=i+1;
+    const isOut = out.includes(t);
+    return `<div class="cell ${isOut?'out':(i<n?'in':'')}">${t}</div>`;
+  }).join("")}</div>`;
+
+const STATES = [
+  {
+    label:"1 · Pre-flight",
+    html:`
+      ${vitals({round:"Not started",q:"—",marking:"—",tables:"18 / 30 live",tablesWarn:true,clock:"7:41pm"})}
+      <div class="body">
+        <div class="wf-label">Before doors</div>
+        <div class="cols">
+          <div>
+            <div class="box"><div class="row"><span>Question set loaded</span><span class="pill on">30 questions</span></div></div>
+            <div class="box"><div class="row"><span>AV cues matched</span><span class="pill on">6 of 6</span></div></div>
+            <div class="box"><div class="row"><span>Images and video</span><span class="pill on">9 files · compressed</span></div></div>
+            <div class="box"><div class="row"><span>Total points available</span><span class="pill on">41 across 30 questions</span></div></div>
+            <div class="box"><div class="row"><span>QR sheet printed</span><span class="pill on">30 tables</span></div></div>
+            <div class="box flag"><div class="row"><span>Tables checked in</span><span class="pill">18 of 30</span></div>
+              <div class="meta">Not yet scanned: 3, 7, 9, 14, 16, 19, 21, 24, 25, 27, 28, 30</div></div>
+          </div>
+          <div>
+            <div class="wf-label">Connection</div>
+            <div class="box"><div class="row"><span>Public address</span><span class="meta">quiz.example.com</span></div></div>
+            <div class="box"><div class="row"><span>Tunnel</span><span class="pill on">Up · 41 min</span></div></div>
+            <div class="box"><div class="row"><span>Saved state</span><span class="meta">Recovers on restart</span></div></div>
+            <div class="cue">Sleep is disabled on this machine. Keep it plugged in.</div>
+            <div class="cue">Marker is set up and watching the queue. They start as soon as question 2 closes.</div>
+          </div>
+        </div>
+        <div class="btnrow"><div class="btn ghost">Test question to all tables</div><div class="btn">Start round 1<kbd>↵</kbd></div></div>
+      </div>`,
+    notes:[
+      ["1","A check-in count before you start is the single most useful pre-flight number. Twelve unscanned tables at 7:41 means walking the room, not starting."],
+      ["2","The test question proves the whole chain — tunnel, phones, answers coming back — before it matters."],
+      ["3","Tunnel status stays in the strip all night. If it drops mid-event you need to know instantly, not from a confused table. <span class='ref'>Scope 7</span>"]
+    ]
+  },
+  {
+    label:"2 · Question open",
+    html:`
+      ${vitals({})}
+      <div class="body">
+        <div class="row"><div class="wf-label">Round 1 · Question 4 · Multiple choice · 1 pt</div><div class="wf-label">Open · 01:12</div></div>
+        <div class="rule"></div>
+        <div class="cols">
+          <div>
+            <h2 class="wf-h">Which Australian city hosted the 2000 Olympics?</h2>
+            <p class="wf-p"><strong>Sydney</strong> · options A Melbourne / B Sydney / C Brisbane / D Perth</p>
+            <div class="cue">Say: “No conferring with the next table.” Then pause 5 seconds.</div>
+            <div class="btnrow">
+              <div class="btn ghost">Close<kbd>C</kbd></div>
+              <div class="btn off">Reveal<kbd>R</kbd></div>
+              <div class="btn off">Next<kbd>␣</kbd></div>
+            </div>
+            <div class="btnrow" style="margin-top:0"><div class="btn ghost">Award bonus point<kbd>B</kbd></div><div class="btn ghost">Pause<kbd>P</kbd></div></div>
+          </div>
+          <div>
+            <div class="row"><span class="wf-label" style="margin:0">Tables answered</span><span class="wf-label" style="margin:0">23 / 30</span></div>
+            ${grid(23)}
+            <div class="meta"><span class="pin">2</span>Outstanding: 3, 9, 14, 21, 25, 28, 30</div>
+            <div class="rule"></div>
+            <div class="wf-label">Up next</div>
+            <div class="box">Q5 · Free text · Who wrote <em>Great Expectations</em>?</div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","Correct answer sits in front of the host permanently. You are reading it aloud, not remembering it."],
+      ["2","The grid answers the only live question you have: wait, or move on? Chase by table number."],
+      ["3","Reveal is dead until the question closes, so a mis-click can't spoil an answer."],
+      ["4","Keyboard first. Space to advance, C to close, R to reveal — a clicker or a spare keyboard runs the whole night."],
+      ["5","Next-question preview means you can set up your patter while the current one runs."]
+    ]
+  },
+  {
+    label:"3 · With AV cue",
+    html:`
+      ${vitals({q:"6 of 10",clock:"8:49pm"})}
+      <div class="body">
+        <div class="row"><div class="wf-label">Round 1 · Question 6 · Multiple choice · 2 pts</div><div class="wf-label">Cued</div></div>
+        <div class="rule"></div>
+        <div class="cols">
+          <div>
+            <h2 class="wf-h">Name the film this score is from.</h2>
+            <div class="cue" style="border-style:solid;border-left:3px solid var(--warn)">
+              <strong>AV cue 04</strong> — audio clip, 0:32<br>
+              Play from the venue laptop. Not sent to phones.
+            </div>
+            <div class="btnrow">
+              <div class="btn">Open question after clip<kbd>O</kbd></div>
+            </div>
+            <div class="meta"><span class="pin">1</span>Phones show “listen up” until you open it.</div>
+            <div class="rule"></div>
+            <div class="wf-label">Replay on phones</div>
+            <div class="box"><div class="row"><span>YouTube embed</span><span class="pill">Locked until question closes</span></div></div>
+          </div>
+          <div>
+            <div class="wf-label">Playback</div>
+            <div class="box dash">AV runs outside this app — cue card only</div>
+            <div class="meta">Archived to the YouTube playlist after the event, so tables can rewatch. <span class="ref">Scope 3.8</span></div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","Holding phones on a neutral screen during the clip stops people reading ahead while a 32-second track plays."],
+      ["2","Open decision: does the app just <em>show</em> the cue, or does it trigger playback? A cue card is far simpler and fails softer."],
+      ["3","If a second person runs AV, they need this cue list printed too — the console is one screen and the host is holding it."]
+    ]
+  },
+  {
+    label:"4 · Closed, pre-reveal",
+    html:`
+      ${vitals({clock:"8:44pm"})}
+      <div class="body">
+        <div class="row"><div class="wf-label">Round 1 · Question 4</div><div class="wf-label">Closed · 30 / 30 in</div></div>
+        <div class="rule"></div>
+        <h2 class="wf-h">Which Australian city hosted the 2000 Olympics?</h2>
+        <div class="cols">
+          <div>
+            <div class="wf-label">Answer spread</div>
+            <div class="box"><div class="row"><span>B · Sydney</span><span class="pill on">26 tables · correct</span></div></div>
+            <div class="box"><div class="row"><span>A · Melbourne</span><span class="pill">3 tables</span></div></div>
+            <div class="box"><div class="row"><span>C · Brisbane</span><span class="pill">1 table</span></div></div>
+            <div class="btnrow"><div class="btn">Reveal answer<kbd>R</kbd></div><div class="btn ghost">Next<kbd>␣</kbd></div></div>
+          </div>
+          <div>
+            <div class="wf-label">Auto-scored</div>
+            <div class="box">26 tables +1 · no marking needed</div>
+            <div class="meta"><span class="pin">2</span>Multiple choice scores itself the moment you close.</div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","The spread is the host's material — “three of you fancied Melbourne” is the line that gets a laugh. Worth showing even though it isn't functionally needed."],
+      ["2","Close and reveal are separate on purpose. You close, you talk, then you reveal."],
+      ["3","Never show which table gave a wrong answer here. Aggregate only."]
+    ]
+  },
+  {
+    label:"5 · Paused",
+    html:`
+      ${vitals({q:"4 of 10 · PAUSED",marking:"1 of 3 marked",clock:"8:47pm"})}
+      <div class="body">
+        <div class="wf-label">Paused 2m 14s</div>
+        <div class="rule"></div>
+        <div class="cols">
+          <div>
+            <h2 class="wf-h">Room is paused</h2>
+            <div class="cue" style="border-left:3px solid var(--warn)">On screen: “Back in five minutes — mains are coming out.”</div>
+            <div class="wf-label">Reason</div>
+            <div><span class="pill on">Food service</span><span class="pill">Speech</span><span class="pill">Marking catching up</span><span class="pill">Technical</span><span class="pill">Other</span></div>
+            <div class="btnrow" style="margin-top:12px"><div class="btn">Resume<kbd>P</kbd></div></div>
+            <div class="meta"><span class="pin">1</span>Resumes to exactly where you were — Q4 still open, timer where it stopped.</div>
+          </div>
+          <div>
+            <div class="wf-label">Still running</div>
+            <div class="box"><div class="row"><span>Marking</span><span class="pill on">Active</span></div></div>
+            <div class="box"><div class="row"><span>Floor support</span><span class="pill on">Active</span></div></div>
+            <div class="rule"></div>
+            <div class="wf-label">Frozen</div>
+            <div class="box"><div class="row"><span>Player answers</span><span class="pill">Rejected</span></div></div>
+            <div class="box"><div class="row"><span>Captain handover</span><span class="pill">Rejected</span></div></div>
+            <div class="box"><div class="row"><span>Timer</span><span class="pill">Stopped at 0:48</span></div></div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","Pause overlays state rather than changing it. Resume restores exactly what was there, including a half-typed answer on a captain's phone."],
+      ["2","Marking deliberately keeps running — “pause while marking catches up” is one of the two reasons you'd press this."],
+      ["3","The question is hidden on phones, not greyed out. Otherwise people read ahead while the room does something else."],
+      ["4","Reason and duration are logged. “Why did we run 40 minutes late” gets asked afterwards."]
+    ]
+  },
+  {
+    label:"6 · Bonus point",
+    html:`
+      ${vitals({q:"4 of 10",clock:"8:45pm"})}
+      <div class="body">
+        <div class="wf-label">Award a bonus point</div>
+        <div class="rule"></div>
+        <div class="cols">
+          <div>
+            <h2 class="wf-h">Which table?</h2>
+            ${grid(0)}
+            <div class="meta"><span class="pin">1</span>Tap a table. Tap again to award more than one.</div>
+            <div class="rule"></div>
+            <div class="wf-label">Amount</div>
+            <div><span class="pill on">+1</span><span class="pill">+2</span><span class="pill">+3</span><span class="pill">Custom</span></div>
+          </div>
+          <div>
+            <div class="wf-label">Reason</div>
+            <div class="box dash">Best heckle of the round</div>
+            <div class="meta">Shows on that table's phones. Optional, but they will ask.</div>
+            <div class="btnrow"><div class="btn ghost">Cancel<kbd>esc</kbd></div><div class="btn">Award<kbd>↵</kbd></div></div>
+            <div class="rule"></div>
+            <div class="wf-label">Awarded tonight</div>
+            <div class="box"><div class="row"><span>Table 4 · +1</span><span class="meta">fastest to name captain</span></div></div>
+            <div class="box"><div class="row"><span>Table 19 · +2</span><span class="meta">round 1 wooden spoon</span></div></div>
+            <div class="meta"><span class="pin">3</span>Every award is logged with who gave it.</div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","Bonus is a host instinct — someone says something funny, a table helps clear glasses. It has to be two taps or it won't get used."],
+      ["2","Available at any time, not tied to a question. That's what makes it a bonus rather than a score correction."],
+      ["3","Log who awarded it. With multiple operators and a prize on the line, unexplained points cause arguments."],
+      ["4","Deliberately blunt: it adds points and never removes them. Corrections belong on the scores screen."]
+    ]
+  },
+  {
+    label:"7 · Marking queue",
+    html:`
+      ${vitals({q:"7 of 10 · live",marking:"1 of 3 marked",markWarn:true,clock:"8:56pm",tables:"30 / 30 live"})}
+      <div class="body">
+        <div class="row"><div class="wf-label">Marking · Round 1, Q5</div><div class="wf-label">4 of 30 to judge</div></div>
+        <div class="rule"></div>
+        <h2 class="wf-h">Who wrote <em>Great Expectations</em>?</h2>
+        <p class="wf-p">Accepting: Charles Dickens · Dickens · C Dickens · dickens</p>
+        <div class="box dash">26 auto-matched and hidden</div>
+        <div class="rule"></div>
+        <div class="box"><div class="row"><span>Table 6 — <strong>Charles Dickins</strong></span>
+          <span><span class="pill on">Correct<kbd>Y</kbd></span><span class="pill">Wrong<kbd>N</kbd></span></span></div>
+          <div class="meta">Accept this spelling for every table <kbd>A</kbd></div></div>
+        <div class="box"><div class="row"><span>Table 11 — <strong>dickens, charles</strong></span>
+          <span><span class="pill">Correct</span><span class="pill">Wrong</span></span></div></div>
+        <div class="box"><div class="row"><span>Table 19 — <strong>Charles Darwin</strong></span>
+          <span><span class="pill">Correct</span><span class="pill">Wrong</span></span></div></div>
+        <div class="box"><div class="row"><span>Table 22 — <em>no answer</em></span>
+          <span><span class="pill">Correct</span><span class="pill on">Wrong</span></span></div></div>
+        <div class="btnrow"><div class="btn ghost">Next unmarked question</div><div class="btn">Publish round 1 scores<kbd>↵</kbd></div></div>
+      </div>`,
+    notes:[
+      ["1","Aliases carry the load — 26 hidden, 4 judged. That's what turns 300 marks into roughly 40 across the night. <span class='ref'>Scope 3.4</span>"],
+      ["2","“Accept for every table” is the highest-value control here. One keypress retires a whole spelling variant."],
+      ["3","Marked by question, not by table — you hold one correct answer in your head and sweep."],
+      ["4","Y / N / A keys. A marker doing 40 of these with a mouse is slower and more error-prone."],
+      ["5","Publishing is explicit and snapshots the board. Nothing reaches the big screen until the round is marked and you say so."],["6","This runs <em>during</em> play — question 7 is still live while round 1's closed questions get marked. The round-end break becomes a reconciliation, not a batch of ninety."],["7","Reopening a marked question re-queues only the tables whose answer then changes, never the whole question."]
+    ]
+  },
+  {
+    label:"8 · Table in trouble",
+    html:`
+      ${vitals({q:"7 of 10",tables:"29 / 30 live",tablesWarn:true,clock:"9:19pm"})}
+      <div class="body">
+        <div class="row"><div class="wf-label">Table support</div><div class="wf-label">Question 7 open</div></div>
+        <div class="rule"></div>
+        <div class="cols">
+          <div>
+            <div class="wf-label">Table 14</div>
+            <div class="box flag">Last seen 11 minutes ago · 0 answers this round</div>
+            <div class="box"><div class="row"><span>Players</span><span class="meta">Ash, Jo, Sam</span></div></div>
+            <div class="rule"></div>
+            <div class="btnrow" style="flex-direction:column">
+              <div class="btn ghost">Show their join link and code</div>
+              <div class="btn ghost">Enter an answer for this table</div>
+              <div class="btn warn">Move table to paper</div>
+            </div>
+          </div>
+          <div>
+            <div class="wf-label">All tables</div>
+            ${grid(29,[14])}
+            <div class="meta"><span class="pin">1</span>Tap any table to open this panel.</div>
+            <div class="rule"></div>
+            <div class="wf-label">Open issues</div>
+            <div class="box flag">Table 14 — dropped off, 11 min</div>
+            <div class="box">Table 6 — disputed Q5, resolved</div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","Something will go wrong on the night. A phone dies, a table never scans, someone swears the answer didn't save. This screen is the difference between a hiccup and a stall."],
+      ["2","Entering an answer on a table's behalf is the escape hatch that keeps the night moving. Log it so it's defensible if there's a prize."],
+      ["3","“Move to paper” accepts reality — that table writes answers down and you key them in at the break."],
+      ["4","Open decision: who runs this while the host is on the mic? A second operator is the honest answer for 30 tables."]
+    ]
+  },
+  {
+    label:"9 · Scores &amp; disputes",
+    html:`
+      ${vitals({q:"Round 2 complete",clock:"9:58pm"})}
+      <div class="body">
+        <div class="row"><div class="wf-label">Scores after round 2</div><div class="wf-label">Not yet published</div></div>
+        <div class="rule"></div>
+        <div class="cols">
+          <div>
+            <div class="lb-row"><span><span class="n">1</span>Quizteama Aguilera</span><span>17</span></div>
+            <div class="lb-row"><span><span class="n">2</span>The Quizzards</span><span>16</span></div>
+            <div class="lb-row"><span><span class="n">3</span>Table 4</span><span>16</span></div>
+            <div class="lb-row"><span><span class="n">4</span>Table 12</span><span>14</span></div>
+            <div class="lb-row"><span><span class="n">5</span>Table 18</span><span>13</span></div>
+            <div class="meta">Tie at second — resolved on the round 3 tie-break question.</div>
+          </div>
+          <div>
+            <div class="wf-label">Adjust a score</div>
+            <div class="box"><div class="row"><span>Table 6 · Q5</span><span class="pill on">Marked wrong</span></div>
+              <div class="meta">“Charles Dickins” — spelling · <span class="ref">overturn +1</span></div></div>
+            <div class="box dash">+ Manual adjustment with a reason</div>
+            <div class="meta"><span class="pin">2</span>Every change is logged with who and why.</div>
+            <div class="btnrow"><div class="btn">Publish to big screen<kbd>↵</kbd></div></div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","Disputes are a certainty with free text. Give yourself a fast, visible way to overturn a mark rather than arguing at a table."],
+      ["2","Log the reason. If there's a prize, you'll want a record of every adjustment."],
+      ["3","Ties surface here, before the final round, so you know whether the tie-break matters. <span class='ref'>Scope 3.6</span>"]
+    ]
+  },
+  {
+    label:"10 · Final",
+    html:`
+      ${vitals({round:"3 of 3",q:"10 of 10",clock:"10:34pm"})}
+      <div class="body">
+        <div class="wf-label">End of night</div>
+        <h2 class="wf-h">All rounds complete · 30 questions marked</h2>
+        <div class="cols">
+          <div>
+            <div class="lb-row"><span><span class="n">1</span>The Quizzards</span><span>26</span></div>
+            <div class="lb-row"><span><span class="n">2</span>Quizteama Aguilera</span><span>25</span></div>
+            <div class="lb-row"><span><span class="n">3</span>Table 4</span><span>23</span></div>
+            <div class="btnrow" style="flex-direction:column">
+              <div class="btn">Reveal winner on big screen</div>
+              <div class="btn ghost">Send YouTube playlist to all tables</div>
+              <div class="btn ghost">Export results</div>
+            </div>
+          </div>
+          <div>
+            <div class="wf-label">After the reveal</div>
+            <div class="cue">Every phone shows the playlist link and the table's final score. This is the one moment they'll all be looking down at once — use it.</div>
+            <div class="meta"><span class="pin">2</span>Export gives a per-table, per-question sheet for anyone who asks.</div>
+          </div>
+        </div>
+      </div>`,
+    notes:[
+      ["1","The AV archive lands on phones at the end, not the start — it would be a distraction during play. <span class='ref'>Scope 3.8</span>"],
+      ["2","Export matters more than it sounds. Someone always wants to see the workings."],
+      ["3","Worth pushing something to phones at the close, since every device is already open and attention is high."]
+    ]
+  }
+];
+
+let idx = 0;
+const $steps=document.getElementById("steps"), $stage=document.getElementById("stage"), $notes=document.getElementById("notes");
+
+function render(){
+  $steps.innerHTML="";
+  STATES.forEach((s,i)=>{
+    const b=document.createElement("button");
+    b.className="step"; b.textContent=s.label;
+    b.setAttribute("aria-selected", i===idx);
+    b.onclick=()=>{idx=i;render();};
+    $steps.appendChild(b);
+  });
+  const st=STATES[idx];
+  $stage.innerHTML=`<div class="device"><span class="tag">Host console</span><div class="screen">${st.html}</div></div>`;
+  $notes.innerHTML=st.notes.map(n=>`<div class="note"><span class="pin">${n[0]}</span><span>${n[1]}</span></div>`).join("");
+}
+render();
+</script>
+</body>
+</html>

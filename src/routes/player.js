@@ -1,0 +1,283 @@
+// Player-facing routes: token exchange, passphrase gate, name picker with
+// captain auto-assign, takeover, answering, and the polling endpoints.
+import { randomToken } from '../tokens.js';
+import { readSession, writeSession } from '../session.js';
+import { checkLimiter, recordFailure, recordSuccess } from '../passphraseLimiter.js';
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function messagePage(message) {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia</title><link rel="stylesheet" href="/style.css"></head>
+<body><p>${escapeHtml(message)}</p></body></html>`;
+}
+
+export function registerPlayerRoutes(app, { db, q }) {
+  // --- token exchange (CLAUDE.md #4) --------------------------------------
+
+  app.get('/t/:token', async (req, reply) => {
+    const row = q.getTeamByToken.get(req.params.token);
+    if (!row || row.event_status !== 'active' || row.archived) {
+      return reply.code(404).type('text/html').send(messagePage("This code isn't recognised."));
+    }
+
+    const existing = readSession(req);
+    const sameEvent = existing && existing.eventId === row.event_id;
+    const sameTeam = sameEvent && existing.teamId === row.id;
+
+    writeSession(reply, {
+      sid: existing?.sid || randomToken(16),
+      eventId: row.event_id,
+      teamId: row.id,
+      playerId: sameTeam ? existing.playerId : null,
+      gateOk: sameEvent ? existing.gateOk : false
+    });
+
+    return reply.redirect('/play', 302);
+  });
+
+  // --- state / version (technical-design §4-5) ----------------------------
+
+  app.get('/v', async (req, reply) => {
+    const session = readSession(req);
+    const ctx = q.resolveSessionContext(session);
+    if (!ctx) return reply.code(401).send({ error: 'no_session' });
+    // Two independent counters, not merged into one (CLAUDE.md #5). A
+    // max() of two independently-incrementing values isn't injective —
+    // once table_version numerically overtakes event_version (it does
+    // almost immediately, from the player's own join), a later
+    // event_version bump can be masked because the max doesn't move.
+    // The client must compare both, not a collapsed scalar.
+    return { event_version: ctx.event.version, table_version: ctx.team.table_version };
+  });
+
+  app.get('/state', async (req, reply) => {
+    const session = readSession(req);
+    if (!session) return { stage: 'no_session' };
+
+    const ctx = q.resolveSessionContext(session);
+    if (!ctx) return { stage: 'event_not_running' };
+    const { event, team } = ctx;
+
+    if (!session.gateOk) return { stage: 'gate' };
+
+    if (!session.playerId) {
+      return { stage: 'name', team: { table_number: team.table_number, team_name: team.team_name } };
+    }
+
+    const player = q.getPlayerById.get(session.playerId);
+    if (!player) {
+      return { stage: 'name', team: { table_number: team.table_number, team_name: team.team_name } };
+    }
+
+    // Pause overlays whatever was happening — the question is hidden, not
+    // greyed, so nobody reads ahead while the room is doing something else
+    // (CLAUDE.md #17). Resuming restores exactly what was showing.
+    if (event.paused) {
+      const paused = JSON.parse(event.paused);
+      return {
+        stage: 'paused',
+        event_version: event.version,
+        table_version: team.table_version,
+        message: paused.message,
+        team: { table_number: team.table_number, team_name: team.team_name }
+      };
+    }
+
+    const current = q.getCurrentQuestion.get(event.id);
+    const ourAnswer = current ? q.getAnswer.get(team.id, current.question_id) : null;
+    const captain = team.captain_player_id ? q.getPlayerById.get(team.captain_player_id) : null;
+
+    return {
+      stage: 'play',
+      event_version: event.version,
+      table_version: team.table_version,
+      round: current ? current.round : null,
+      question: current ? q.playerQuestionPayload(current) : null,
+      our_answer: current ? q.playerAnswerPayload(ourAnswer, current.question_status) : null,
+      team: {
+        table_number: team.table_number,
+        team_name: team.team_name,
+        is_captain: team.captain_player_id === player.id,
+        captain_player_id: team.captain_player_id,
+        captain_name: captain ? captain.username : null
+      }
+    };
+  });
+
+  // --- passphrase gate (CLAUDE.md #10, technical-design §7.3-7.4) --------
+
+  app.post('/gate', async (req, reply) => {
+    const session = readSession(req);
+    if (!session) return reply.code(401).send({ error: 'no_session' });
+
+    const limiter = checkLimiter(session.sid);
+    if (!limiter.allowed) {
+      return reply.code(429).send({ ok: false, retry_after_ms: limiter.retryAfterMs });
+    }
+
+    const event = q.getEventById.get(session.eventId);
+    if (!event || event.status !== 'active') {
+      return reply.code(401).send({ error: 'event_not_running' });
+    }
+
+    const supplied = String(req.body?.passphrase || '').trim().toLowerCase();
+    const expected = event.passphrase.trim().toLowerCase();
+
+    if (!supplied || supplied !== expected) {
+      recordFailure(session.sid);
+      return reply.code(401).send({ ok: false, message: 'Incorrect passphrase.' });
+    }
+
+    recordSuccess(session.sid);
+    writeSession(reply, { ...session, gateOk: true });
+    return { ok: true };
+  });
+
+  // --- name picker + captain auto-assign (CLAUDE.md #12, §18.4) ----------
+
+  app.post('/join', async (req, reply) => {
+    const session = readSession(req);
+    if (!session || !session.gateOk) return reply.code(401).send({ error: 'not_ready' });
+
+    const ctx = q.resolveSessionContext(session);
+    if (!ctx) return reply.code(401).send({ error: 'event_not_running' });
+    const { event, team } = ctx;
+    if (event.paused) return reply.code(423).send({ error: 'paused' });
+
+    const username = String(req.body?.username || '').trim().slice(0, 20);
+    if (!username) return reply.code(400).send({ error: 'username_required' });
+
+    const taken = q.getTeamUsernames.all(team.id).map((r) => r.username.toLowerCase());
+    if (taken.includes(username.toLowerCase())) {
+      let n = 2;
+      while (taken.includes(`${username.toLowerCase()} ${n}`)) n++;
+      return reply.code(409).send({ error: 'username_taken', suggested: `${username} ${n}` });
+    }
+
+    let playerId;
+    try {
+      const join = db.transaction(() => {
+        const { lastInsertRowid } = q.insertPlayer.run(event.id, team.id, username);
+        q.assignCaptainIfEmpty.run(lastInsertRowid, team.id);
+        q.bumpTableVersion.run(team.id);
+        return lastInsertRowid;
+      });
+      playerId = join();
+    } catch (err) {
+      if (String(err.code).startsWith('SQLITE_CONSTRAINT')) {
+        return reply.code(409).send({ error: 'username_taken', suggested: `${username} 2` });
+      }
+      throw err;
+    }
+
+    writeSession(reply, { ...session, playerId });
+    return { ok: true };
+  });
+
+  // --- captain takeover (CLAUDE.md #12, technical-design §6.1, §11.2) ----
+
+  app.post('/takeover', async (req, reply) => {
+    const session = readSession(req);
+    if (!session || !session.gateOk || !session.playerId) {
+      return reply.code(401).send({ error: 'not_ready' });
+    }
+
+    const ctx = q.resolveSessionContext(session);
+    if (!ctx) return reply.code(401).send({ error: 'event_not_running' });
+    const { event, team } = ctx;
+    if (event.paused) return reply.code(423).send({ error: 'paused' });
+
+    const expectsCaptain = req.body?.expects_captain_player_id ?? null;
+
+    const changed = db.transaction(() => {
+      const info = q.setCaptainCas.run(session.playerId, team.id, expectsCaptain);
+      if (info.changes === 0) return false;
+      q.bumpTableVersion.run(team.id);
+      return true;
+    })();
+
+    if (!changed) {
+      const fresh = q.getTeamById.get(team.id);
+      const currentCaptain = fresh.captain_player_id ? q.getPlayerById.get(fresh.captain_player_id) : null;
+      return reply.code(409).send({
+        error: 'captain_changed',
+        current_captain_id: fresh.captain_player_id,
+        current_captain: currentCaptain ? currentCaptain.username : null
+      });
+    }
+
+    return { ok: true };
+  });
+
+  // --- answer (CLAUDE.md #12) ---------------------------------------------
+
+  app.post('/answer', async (req, reply) => {
+    const session = readSession(req);
+    if (!session || !session.gateOk || !session.playerId) {
+      return reply.code(401).send({ error: 'not_ready' });
+    }
+
+    const ctx = q.resolveSessionContext(session);
+    if (!ctx) return reply.code(401).send({ error: 'event_not_running' });
+    const { event, team } = ctx;
+    if (event.paused) return reply.code(423).send({ error: 'paused' });
+
+    if (team.captain_player_id !== session.playerId) {
+      return reply.code(403).send({ error: 'not_captain' });
+    }
+
+    const questionId = Number(req.body?.question_id);
+    const current = q.getCurrentQuestion.get(event.id);
+
+    if (!current || current.question_id !== questionId) {
+      return reply.code(409).send({ error: 'question_not_open' });
+    }
+    if (current.question_status === 'CLOSED' || current.question_status === 'REVEALED') {
+      // Own message: an answer arriving the instant a question closes is
+      // correct behaviour, not a bug (technical-design §5).
+      return reply.code(409).send({
+        error: 'closed_before_arrival',
+        message: 'The question closed before your answer arrived.'
+      });
+    }
+    if (current.question_status !== 'OPEN') {
+      return reply.code(409).send({ error: 'question_not_open' });
+    }
+
+    const value = String(req.body?.value ?? '').slice(0, 200);
+    if (current.type === 'mcq') {
+      const options = current.options ? JSON.parse(current.options) : [];
+      if (!options.includes(value)) return reply.code(400).send({ error: 'invalid_option' });
+    } else if (!value) {
+      return reply.code(400).send({ error: 'value_required' });
+    }
+
+    let isCorrect = null;
+    if (current.type === 'mcq') {
+      isCorrect = value === current.correct_answer ? 1 : 0;
+    } else {
+      // Alias auto-match (CLAUDE.md build order: "alias matching behaves
+      // like P0"). Anything not matching the correct answer or a known
+      // alias needs a human — it lands in the marking queue once CLOSED.
+      const normalize = (s) => String(s || '').trim().toLowerCase();
+      const aliases = current.aliases ? JSON.parse(current.aliases) : [];
+      const accepted = new Set([normalize(current.correct_answer), ...aliases.map(normalize)]);
+      isCorrect = accepted.has(normalize(value)) ? 1 : null;
+    }
+    const now = new Date().toISOString();
+
+    db.transaction(() => {
+      q.upsertAnswer.run(event.id, team.id, questionId, value, session.playerId, now, isCorrect);
+      q.bumpTableVersion.run(team.id);
+    })();
+
+    return { ok: true };
+  });
+}

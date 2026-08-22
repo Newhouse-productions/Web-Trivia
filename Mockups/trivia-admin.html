@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin UI — wireframes</title>
+<style>
+:root{
+  --paper:#E6E9EC;--card:#F7F8F9;--ink:#191C1F;--muted:#8A9299;--fill:#D2D7DB;
+  --line:#B4BBC1;--pin:#2F5FE0;--warn:#B4571F;--ok:#2C6E49;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+header{padding:20px 18px 14px;border-bottom:1px solid var(--line)}
+h1{font-size:15px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:11.5px;margin-top:4px}
+.steps{display:flex;gap:6px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.step{font-family:var(--mono);font-size:11.5px;padding:6px 11px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:2px;cursor:pointer;white-space:nowrap}
+.step[aria-selected="true"]{border-color:var(--ink);color:var(--ink);background:var(--card)}
+.step:focus-visible{outline:2px solid var(--pin);outline-offset:2px}
+main{padding:16px 18px 60px;display:grid;gap:20px;max-width:1240px;margin:0 auto}
+@media(min-width:960px){main{grid-template-columns:minmax(0,1fr) 290px;align-items:start}}
+.device{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:11px;position:relative}
+.tag{position:absolute;top:-9px;left:12px;background:var(--paper);padding:0 6px;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.screen{background:#fff;border:1px solid var(--line);min-height:430px;overflow:hidden}
+.bar{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);background:#FBFBFC}
+.bar div{padding:8px 12px;border-right:1px solid var(--line);font-size:11px;color:var(--muted)}
+.bar div strong{color:#3A4046;font-family:var(--sans);font-size:12.5px}
+.body{padding:14px}
+.lbl{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.h{font-family:var(--sans);font-size:16px;font-weight:600;line-height:1.3;margin:0 0 9px;color:#3A4046}
+.p{font-family:var(--sans);font-size:12.5px;color:#6A7278;margin:0 0 10px}
+.rule{height:1px;background:var(--line);margin:13px 0}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.cols{display:flex;gap:14px;flex-wrap:wrap}
+.cols>*{flex:1;min-width:215px}
+.box{border:1px solid var(--line);border-radius:3px;padding:9px 11px;margin-bottom:6px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff}
+.box.dash{border-style:dashed;color:var(--muted)}
+.box.flag{border-left:3px solid var(--warn)}
+.box.good{border-left:3px solid var(--ok)}
+.field{border:1px solid var(--line);border-radius:3px;padding:9px 11px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff;margin-bottom:7px}
+.field .k{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:2px}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:3px;padding:10px 12px;text-align:center;font-family:var(--sans);font-size:12.5px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.warn{background:#fff;color:var(--warn);border-color:var(--warn)}
+.btn.off{background:var(--fill);border-color:var(--fill);color:#fff}
+.btnrow{display:flex;gap:7px;margin:12px 0}
+.btnrow>*{flex:1}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:3px 9px;font-size:10px;color:var(--muted);margin:0 4px 4px 0}
+.pill.on{border-color:var(--ink);color:var(--ink);font-weight:600}
+.pill.warnp{border-color:var(--warn);color:var(--warn)}
+.pill.okp{border-color:var(--ok);color:var(--ok)}
+.meta{font-size:10.5px;color:var(--muted);margin-top:8px}
+.alert{border:1px solid #E0BFA4;background:#FBF0E8;border-radius:3px;padding:10px 11px;font-family:var(--sans);font-size:12px;color:var(--warn);margin-bottom:9px}
+.qrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:3px;margin-bottom:5px;font-family:var(--sans);font-size:12.5px;color:#4A5157;background:#fff}
+.qrow .n{font-family:var(--mono);font-size:10.5px;color:var(--muted);width:34px;flex:none}
+.qrow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px}
+.qr{aspect-ratio:1;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);background:repeating-conic-gradient(var(--fill) 0 25%,#fff 0 50%) 50%/6px 6px}
+.logline{font-family:var(--sans);font-size:11.5px;color:#4A5157;padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}
+.logline .t{font-family:var(--mono);font-size:10px;color:var(--muted);flex:none;width:52px}
+.pin{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--pin);color:#fff;font-size:9.5px;font-weight:600;flex:none;margin-right:6px}
+aside{border-top:1px solid var(--line);padding-top:14px}
+@media(min-width:960px){aside{border-top:none;border-left:1px solid var(--line);padding:0 0 0 20px}}
+.aside-h{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+.note{display:flex;margin-bottom:12px;font-size:12px;line-height:1.5;color:#3E454B}
+.ref{color:var(--pin);font-size:10.5px}
+footer{padding:0 18px 40px;max-width:1240px;margin:0 auto;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Admin UI — wireframes</h1>
+  <div class="sub">v0.1 · content and configuration · separate from the live host console</div>
+</header>
+
+<div class="steps" id="steps"></div>
+
+<main>
+  <div id="stage"></div>
+  <aside><div class="aside-h">Notes on this screen</div><div id="notes"></div></aside>
+</main>
+
+<footer>Admin is where the night is prepared. The host console is where it's run. Keeping them apart is deliberate.</footer>
+
+<script>
+const bar = (state) => `<div class="bar">
+  <div>Event <strong>Winter Quiz · 12 Sep</strong></div>
+  <div>Questions <strong>30</strong></div>
+  <div>Points <strong>41</strong></div>
+  <div>Tables <strong>30</strong></div>
+  <div>Status <strong>${state}</strong></div>
+</div>`;
+
+const STATES = [
+{
+  label:"1 · Events",
+  html:`
+    <div class="bar"><div>Events <strong>4</strong></div><div>Active <strong>Winter Quiz</strong></div><div>Archived <strong>1</strong></div></div>
+    <div class="body">
+      <div class="lbl">All events</div>
+      <div class="box good"><div class="row"><span><strong>Winter Quiz</strong> · 12 Sep</span><span class="pill on">Active</span></div>
+        <div class="meta">30 questions · 30 tables · passphrase purple otter</div></div>
+      <div class="box"><div class="row"><span><strong>Staff Christmas Quiz</strong> · 14 Dec</span><span class="pill">Draft</span></div>
+        <div class="meta">12 questions · no tables yet</div></div>
+      <div class="box"><div class="row"><span><strong>Autumn Quiz</strong> · 3 Jun</span><span class="pill">Finished</span></div>
+        <div class="meta">Read-only · results and exports available · delete 3 Jul</div></div>
+      <div class="box dim" style="opacity:.55"><div class="row"><span><strong>Trial run</strong> · 2 May</span><span class="pill">Archived</span></div></div>
+      <div class="rule"></div>
+      <div class="btnrow"><div class="btn ghost">New event</div><div class="btn ghost">Import config JSON</div><div class="btn ghost">Clone Autumn Quiz</div></div>
+      <div class="meta"><span class="pin">2</span>Activating a different event deactivates Winter Quiz. Blocked while a round is running.</div>
+    </div>`,
+  notes:[
+    ["1","Many events configured, exactly one active. Concurrent live events were rejected — a host opening a question on the wrong event has no graceful recovery."],
+    ["2","Activation names what it's replacing, and is blocked mid-round."],
+    ["3","Cloning copies questions, aliases, settings and tables. Never answers, players or tokens — those are the night, not the setup."],
+    ["4","Finished events are read-only with a visible deletion date. Retention counts from the finish. <span class='ref'>Design 15</span>"]
+  ]
+},
+{
+  label:"2 · Question list",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="row"><div class="lbl">Round 1 · 10 questions · 14 points</div>
+        <div><span class="pill">Round 1</span><span class="pill">2</span><span class="pill">3</span></div></div>
+      <div class="rule"></div>
+      <div class="qrow"><span class="n">1.1</span><span class="t">Which Australian city hosted the 2000 Olympics?</span><span class="pill">choice</span><span class="pill">1pt</span></div>
+      <div class="qrow"><span class="n">1.2</span><span class="t">Who wrote Great Expectations?</span><span class="pill warnp">text</span><span class="pill">2pt</span></div>
+      <div class="qrow"><span class="n">1.3</span><span class="t">Which building is this?</span><span class="pill">choice</span><span class="pill">image</span><span class="pill">theme</span><span class="pill">2pt</span></div>
+      <div class="qrow"><span class="n">1.4</span><span class="t">Name the film this score is from.</span><span class="pill warnp">text</span><span class="pill">AV</span><span class="pill">1pt</span></div>
+      <div class="qrow" style="border-style:dashed"><span class="n">1.5</span><span class="t" style="color:var(--muted)">Untitled — no answer set</span><span class="pill warnp">incomplete</span></div>
+      <div class="btnrow"><div class="btn ghost">Add question</div><div class="btn ghost">Reorder</div><div class="btn">Import spreadsheet</div></div>
+      <div class="row"><span class="meta"><span class="pin">2</span>3 free-text questions in round 1 — about 90 marks on the night</span><span class="meta">Drag to reorder</span></div>
+    </div>`,
+  notes:[
+    ["1","One list, filtered by round. Order number is the identity — <code>1.3</code> is round 1, question 3."],
+    ["2","Surface the free-text count per round here. It's the number that decides whether the night stalls, and it's invisible in a spreadsheet. <span class='ref'>Scope 3.4</span>"],
+    ["3","Incomplete questions are visible but not blocking. You'll draft in passes."],
+    ["4","Type, media and points as pills — scannable without opening anything."]
+  ]
+},
+{
+  label:"3 · Edit question",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="row"><div class="lbl">Editing 1.2</div><div class="lbl">Free text · 2 points</div></div>
+      <div class="rule"></div>
+      <div class="cols">
+        <div>
+          <div class="field"><span class="k">Question</span>Who wrote Great Expectations?</div>
+          <div class="field"><span class="k">Correct answer</span>Charles Dickens</div>
+          <div class="field"><span class="k">Also accept</span>dickens · c dickens · charles dickins</div>
+          <div class="meta"><span class="pin">1</span>Aliases added here save marking time on the night. Add the obvious misspellings now.</div>
+        </div>
+        <div>
+          <div class="field"><span class="k">Type</span><span class="pill">Choice</span><span class="pill on">Free text</span></div>
+          <div class="field"><span class="k">Points</span><span class="pill">1</span><span class="pill on">2</span><span class="pill">3</span><span class="pill">Other</span></div>
+          <div class="field"><span class="k">Image</span>None — <span style="color:var(--pin)">upload</span></div>
+          <div class="field"><span class="k">Image description (required with image)</span><span style="color:var(--muted)">Describe it without naming the answer</span></div>
+          <div class="field"><span class="k">Video (unlocks at reveal)</span>None</div>
+          <div class="field"><span class="k">AV cue</span>None</div>
+          <div class="field"><span class="k">Theme</span><span class="pill on">Inherit round 1</span><span class="pill">Override</span><div class="meta" style="margin-top:4px">Layout and colour · applies to screen and phones</div></div>
+        </div>
+      </div>
+      <div class="btnrow"><div class="btn ghost">Cancel</div><div class="btn ghost">Preview on phone</div><div class="btn">Save</div></div>
+    </div>`,
+  notes:[
+    ["1","Alias editing belongs here, before the night, not only in the marking queue under time pressure."],
+    ["2","“Preview on phone” renders exactly the player payload. It's also how you check nothing sensitive leaks. <span class='ref'>Design 7.1</span>"],
+    ["3","Points are free-form but offered as presets. Someone will type 10 by accident, and the totals bar catches it."],
+    ["4","Image description is required and can't be generated. <code>alt=\"Sydney Opera House\"</code> hands over the answer — it has to describe without naming. <span class='ref'>Design 10.2</span>"]
+  ]
+},
+{
+  label:"4 · Live edit warning",
+  html:`
+    ${bar("Round 2 in progress")}
+    <div class="body">
+      <div class="row"><div class="lbl">Editing 1.2 — already revealed</div><div class="lbl">Live event</div></div>
+      <div class="rule"></div>
+      <div class="alert"><strong>This question has been marked and revealed.</strong><br>
+        Changing the answer will re-score every table that answered it.</div>
+      <div class="cols">
+        <div>
+          <div class="field"><span class="k">Correct answer</span>Charles Dickens</div>
+          <div class="field" style="border-color:var(--warn)"><span class="k">Changing to</span>Charles Dickens or Dickens</div>
+        </div>
+        <div>
+          <div class="lbl">Impact</div>
+          <div class="box good">7 tables would go from wrong to correct · +14 points</div>
+          <div class="box">23 tables unaffected</div>
+          <div class="box flag">Leaderboard already published — will need re-publishing</div>
+        </div>
+      </div>
+      <div class="btnrow"><div class="btn ghost">Cancel</div><div class="btn warn">Apply and re-score</div></div>
+      <div class="meta"><span class="pin">1</span>Logged as an admin override with a reason.</div>
+    </div>`,
+  notes:[
+    ["1","The dangerous case. Editing a revealed question rewrites history and moves the leaderboard the room has already seen."],
+    ["2","Show the impact before the change, counted in tables and points. Never apply a silent re-score."],
+    ["3","Editing a question that is currently <em>open</em> is worse in a different way — every phone re-renders mid-answer. Block it outright and make the host close first."],
+    ["4","Future questions edit freely with no warning at all. Most edits during an event are fixing a typo three questions ahead."]
+  ]
+},
+{
+  label:"5 · Import & validate",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="lbl">Import from spreadsheet</div>
+      <div class="box dash">questions-v3.csv · 30 rows · dropped here</div>
+      <div class="row" style="margin:10px 0"><span><span class="pill okp">26 valid</span><span class="pill warnp">3 warnings</span><span class="pill warnp">1 error</span></span>
+        <span class="meta">Nothing is saved until you commit</span></div>
+      <div class="rule"></div>
+      <div class="box flag"><strong>Error · row 18</strong><br>Type is “choice” but no options given. This row will not import.</div>
+      <div class="box flag"><strong>Warning · row 7</strong><br>Points value is 10. Highest elsewhere is 3.</div>
+      <div class="box flag"><strong>Warning · rows 12 and 23</strong><br>Duplicate order number 2.4.</div>
+      <div class="box flag"><strong>Warning · row 25</strong><br>Image file <code>opera.jpg</code> not found in upload.</div>
+      <div class="rule"></div>
+      <div class="row"><span class="lbl" style="margin:0">On commit</span><span><span class="pill">Append</span><span class="pill on">Replace all</span></span></div>
+      <div class="btnrow"><div class="btn ghost">Cancel</div><div class="btn">Import 29 rows</div></div>
+    </div>`,
+  notes:[
+    ["1","Validate and preview before committing. An import that half-succeeds is worse than one that refuses."],
+    ["2","Errors block a row; warnings don't. Points of 10 is probably a typo but might be deliberate — flag, don't forbid."],
+    ["3","Duplicate order numbers are the classic spreadsheet mistake and silently reorder the night if unchecked."],
+    ["4","Replace vs append matters. Replace after the event starts should be blocked entirely."]
+  ]
+},
+{
+  label:"6 · Media",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="row"><div class="lbl">Media · 9 files</div><div class="lbl">4.2 MB → 780 KB after processing</div></div>
+      <div class="rule"></div>
+      <div class="cols">
+        <div>
+          <div class="box good"><div class="row"><span>1.3 · opera-house.webp</span><span class="pill okp">86 KB</span></div>
+            <div class="meta">1200px wide · from 3.1 MB original</div></div>
+          <div class="box good"><div class="row"><span>2.7 · map.webp</span><span class="pill okp">102 KB</span></div></div>
+          <div class="box flag"><div class="row"><span>3.2 · portrait.png</span><span class="pill warnp">Not processed</span></div>
+            <div class="meta">4200px wide — will be resized on save</div></div>
+          <div class="box flag"><div class="row"><span>2.7 · map.webp</span><span class="pill warnp">No description</span></div>
+            <div class="meta">Blocks import until described</div></div>
+          <div class="box dash">Drop images here</div>
+        </div>
+        <div>
+          <div class="lbl">Video</div>
+          <div class="box"><div class="row"><span>1.4 · YouTube</span><span class="pill">Unlocks at reveal</span></div>
+            <div class="meta">Plays on the venue system during the question. Phones get the embed afterwards.</div></div>
+          <div class="box dash">+ Add video URL</div>
+          <div class="rule"></div>
+          <div class="meta"><span class="pin">2</span>Media is only served once its question opens. Before that the file isn't reachable. <span class="ref">Design 7.1</span></div>
+        </div>
+      </div>
+    </div>`,
+  notes:[
+    ["1","Compress on upload, always. A 3 MB camera file served to 240 phones on venue wifi is a self-inflicted outage."],
+    ["2","Media URLs are gated by question state, or the file listing becomes a preview of the night."],
+    ["3","Show the before and after size. It's the fastest way to spot someone bypassing processing."]
+  ]
+},
+{
+  label:"7 · Tables & codes",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="row"><div class="lbl">30 tables · 214 seats · 34 codes</div><div class="lbl">Passphrase: purple otter</div></div>
+      <div class="rule"></div>
+      <div class="cols">
+        <div>
+          <div class="box dash">Upload tables.csv — table_number, seats, colour</div>
+          <div class="btnrow" style="margin-bottom:8px"><div class="btn ghost">Auto-assign colours</div></div>
+          <div class="box"><div class="row"><span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#C2410C;vertical-align:-2px;margin-right:7px"></span><strong>1</strong> · 8 seats · Amber</span><span class="pill">edit</span></div></div>
+          <div class="box"><div class="row"><span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#1D4ED8,#1E3A8A);vertical-align:-2px;margin-right:7px"></span><strong>2</strong> · 8 seats · Deep blue gradient</span><span class="pill">edit</span></div></div>
+          <div class="box"><div class="row"><span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#15803D;vertical-align:-2px;margin-right:7px"></span><strong>12A</strong> · 6 seats · Green</span><span class="pill">edit</span></div></div>
+          <div class="box dash">+ Add table</div>
+          <div class="rule"></div>
+          <div class="qrgrid">${Array.from({length:12},(_,i)=>`<div class="qr">T${i+1}</div>`).join("")}</div>
+          <div class="btnrow"><div class="btn">Print QR sheet</div></div>
+          <div class="meta"><span class="pin">1</span>4 spare codes printed — a 31st table always appears.</div>
+        </div>
+        <div>
+          <div class="lbl">Table 12</div>
+          <div class="field"><span class="k">Seats</span>6 · 3 joined</div>
+          <div class="field"><span class="k">Team colour</span><span class="pill on">Solid</span><span class="pill">Gradient</span>
+            <div style="margin-top:6px;height:26px;border-radius:3px;background:#C2410C"></div>
+            <div class="meta" style="margin-top:4px">Contrast 5.1:1 · passes</div></div>
+          <div class="field"><span class="k">Team name</span>The Quizzards <span class="pill">set by captain</span></div>
+          <div class="field"><span class="k">Captain</span>Dave — <span style="color:var(--pin)">reassign</span></div>
+          <div class="field"><span class="k">Players</span>Dave · Priya · Marcus</div>
+          <div class="field"><span class="k">Token</span>9f3k2m4p</div>
+          <div class="btnrow"><div class="btn ghost">Rename team</div><div class="btn warn">Regenerate code</div></div>
+          <div class="meta"><span class="pin">3</span>Regenerating invalidates the printed code. Confirm twice.</div>
+        </div>
+      </div>
+    </div>`,
+  notes:[
+    ["1","Print spares. A code will get destroyed by a drink and an extra table will turn up."],
+    ["2","Renaming is here as well as on the floor console — this is the moderation route for a name you'd rather not project. <span class='ref'>Scope 3.2</span>"],
+    ["3","Tokens are random, never table numbers. Regenerating one is a last resort because the printed card becomes wrong."],
+    ["4","Renumbering is safe — the token is the identity, the number is only a label. Say so in the UI or people will avoid a change they should make."],
+    ["5","Seats drive the pre-flight signal: “3 of 6 joined” beats a bare scanned count. Guidance only — never block a seventh person at a six-seat table."],
+    ["6","Removing a table with answers is blocked once the event starts. Archive instead."],
+    ["7","Themes are wayfinding — “you're the amber table” carries across a room better than a number. The number still appears everywhere alongside it."],
+    ["8","Contrast validated at assignment. A table shouldn't be able to configure itself into unreadability."],
+    ["9","16 hues across 30 tables means repeats are certain — pair a repeated hue with a different block/gradient treatment."]
+  ]
+},
+{
+  label:"8 · Theme",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="row"><div class="lbl">Theme · big screen and phones</div><div class="lbl">Applies live</div></div>
+      <div class="rule"></div>
+      <div class="row" style="margin-bottom:9px">
+        <span><span class="pill on">Event default</span><span class="pill">Round 2</span><span class="pill">Q2.7</span></span>
+        <span class="meta" style="margin:0">Question &gt; round &gt; default</span>
+      </div>
+      <div class="cols">
+        <div>
+          <div class="lbl">Preset</div>
+          <div><span class="pill">Light</span><span class="pill on">Dark</span><span class="pill">Festive</span><span class="pill">Corporate</span></div>
+          <div class="field" style="margin-top:9px"><span class="k">Layout</span><span class="pill on">Standard</span><span class="pill">Image</span><span class="pill">Media</span><span class="pill">Statement</span></div>
+          <div class="field"><span class="k">Background</span><span class="pill">Solid</span><span class="pill on">Gradient</span>
+            <div style="margin-top:6px;height:26px;border-radius:3px;background:linear-gradient(135deg,#1A1D24,#2A2F3A)"></div></div>
+          <div class="field"><span class="k">Accent</span>
+            <div style="margin-top:4px;height:20px;width:60px;border-radius:3px;background:#E0A82E"></div></div>
+          <div class="field"><span class="k">Title</span>Winter Quiz</div>
+          <div class="field"><span class="k">Logo</span>venue-mark.png · 64px tall</div>
+          <div class="field"><span class="k">Footer strip</span>None</div>
+          <div class="box good">Contrast 9.2:1 · passes the 7:1 projector bar</div>
+          <div class="rule"></div>
+          <div class="lbl">Resolved themes · 30 questions</div>
+          <div class="box good"><div class="row"><span>28 pass</span><span class="pill okp">ok</span></div></div>
+          <div class="box flag"><div class="row"><span>2.7 and 3.4 fail</span><span class="pill warnp">3.9:1</span></div>
+            <div class="meta">Round background with the inherited accent. Neither layer fails on its own.</div></div>
+          <div class="meta">An event can't be activated while a resolved theme fails.</div>
+        </div>
+        <div>
+          <div class="lbl">Preview · full size</div>
+          <div style="border:1px solid var(--line);border-radius:3px;aspect-ratio:16/9;background:linear-gradient(135deg,#1A1D24,#2A2F3A);padding:12px;color:#F5F5F0;font-family:var(--sans)">
+            <div style="font-size:8px;letter-spacing:.1em;color:#E0A82E">ROUND 1 · Q4</div>
+            <div style="font-size:15px;font-weight:700;margin-top:6px;line-height:1.25">Which Australian city hosted the 2000 Olympics?</div>
+          </div>
+          <div class="lbl" style="margin-top:12px">Preview · back of the room</div>
+          <div style="border:1px solid var(--line);border-radius:3px;aspect-ratio:16/9;width:34%;background:linear-gradient(135deg,#1A1D24,#2A2F3A);padding:4px;color:#F5F5F0;font-family:var(--sans)">
+            <div style="font-size:3px;color:#E0A82E">ROUND 1 · Q4</div>
+            <div style="font-size:5px;font-weight:700;line-height:1.2;margin-top:2px">Which Australian city hosted the 2000 Olympics?</div>
+          </div>
+          <div class="meta"><span class="pin">2</span>If it fails here, it fails on the night.</div>
+        </div>
+      </div>
+    </div>`,
+  notes:[
+    ["1","Projectors can't render black — they render it as room light. Pure black arrives dark grey and true-black elements on it look like dirt. One dark tone, never two."],
+    ["2","The back-of-the-room preview is the one that catches problems. A theme that looks refined on a laptop is often unreadable from row twelve."],
+    ["3","7:1 rather than 4.5:1, because ambient light, a dusty lens and a cheap screen all subtract. The validator refuses bad combinations rather than shipping them to a wall."],
+    ["4","No text over a background image, ever. It survives the laptop preview and fails in the room."],
+    ["5","Table colours appear here as a fixed swatch beside a leaderboard row — never a row background, or every table becomes its own contrast problem."],
+    ["6","The cascade is per property, like CSS. A music round that only wants a darker background shouldn't restate the logo and accent — that's how three copies drift apart."],
+    ["7","Validate the <em>resolved</em> theme, never the layers. A round background plus an inherited accent can fail when neither fails alone. This is the trap the cascade creates."],
+    ["8","Themes swap when a question becomes current, not when it opens — the change lands in the lull rather than as everyone looks up. Crossfade 400ms, and instant for reduced-motion."]
+  ]
+},
+{
+  label:"9 · Settings",
+  html:`
+    ${bar("Not started")}
+    <div class="body">
+      <div class="cols">
+        <div>
+          <div class="lbl">Access</div>
+          <div class="field"><span class="k">Room passphrase</span>purple otter</div>
+          <div class="field"><span class="k">Host PIN</span>••••</div>
+          <div class="field"><span class="k">Marker PIN</span>••••</div>
+          <div class="field"><span class="k">Floor PIN</span>••••</div>
+          <div class="field"><span class="k">Admin PIN</span>••••</div>
+          <div class="meta"><span class="pin">1</span>Separate PINs per role. Admin is the only one that can rewrite scored questions.</div>
+        </div>
+        <div>
+          <div class="lbl">Play</div>
+          <div class="field"><span class="k">Poll interval</span><span class="pill">1s</span><span class="pill on">3s</span><span class="pill">5s</span></div>
+          <div class="field"><span class="k">Question timer</span><span class="pill on">Off — host controls</span><span class="pill">On</span></div>
+          <div class="field"><span class="k">Leaderboard</span><span class="pill">Every round</span><span class="pill on">Rounds 2 and 3</span><span class="pill">End only</span></div>
+          <div class="field"><span class="k">Tie-break</span>Closest-guess question 3.10</div>
+          <div class="field"><span class="k">Answer mode</span>Captain only — one answer per table</div>
+          <div class="meta">Auto-assigned to the first player to open a table's page, so no table is ever locked out.</div>
+          <div class="meta"><span class="pin">2</span>These are the open scope decisions, made settings rather than hardcoded.</div>
+        </div>
+      </div>
+    </div>`,
+  notes:[
+    ["1","Five PINs. Admin is separate from host precisely because admin can rewrite scored questions and host cannot."],
+    ["2","Turning the undecided scope items into settings defers the decisions cheaply and lets you change your mind at rehearsal. <span class='ref'>Scope 3</span>"],
+    ["3","Poll interval as a setting means you can tune it against the real venue network on the night."]
+  ]
+},
+{
+  label:"10 · Audit & backup",
+  html:`
+    ${bar("Round 2 in progress")}
+    <div class="body">
+      <div class="row"><div class="lbl">Audit log</div><div class="lbl">142 entries</div></div>
+      <div class="rule"></div>
+      <div class="logline"><span class="t">21:14</span><span>Host · revealed 2.4</span></div>
+      <div class="logline"><span class="t">21:12</span><span>Marker (Sam) · overturned table 6 on 2.3 — spelling</span></div>
+      <div class="logline"><span class="t">21:09</span><span>Floor (Jo) · entered answer for table 14 — phone dead</span></div>
+      <div class="logline"><span class="t">21:05</span><span>Host · bonus +1 to table 4 — good heckle</span></div>
+      <div class="logline"><span class="t">20:58</span><span>Admin · alias “dickins” added to 1.2, re-scored 7 tables</span></div>
+      <div class="logline"><span class="t">20:41</span><span>Host · reopened 1.9 — table 21 missed</span></div>
+      <div class="rule"></div>
+      <div class="cols">
+        <div><div class="lbl">Backup</div>
+          <div class="box"><div class="row"><span>quiz.db — everything</span><span class="pill">2.1 MB</span></div><div class="meta">Answers, marks, bonuses, audit · last download 20:45</div></div>
+          <div class="box"><div class="row"><span>config.json — content only</span><span class="pill">84 KB</span></div><div class="meta">Questions, aliases, tables, settings · portable between machines</div></div>
+          <div class="btnrow"><div class="btn ghost">Download database</div><div class="btn ghost">Export config JSON</div></div>
+          <div class="box dash">Import config JSON — blocked, event running</div></div>
+        <div><div class="lbl">Danger</div>
+          <div class="box flag">Clear all answers</div>
+          <div class="box flag">Regenerate all table codes</div>
+          <div class="box flag">Reset event</div>
+          <div class="meta"><span class="pin">3</span>Disabled entirely once the event is running.</div></div>
+      </div>
+    </div>`,
+  notes:[
+    ["1","Every override, bonus, reopen and answer-entered-on-behalf, with the role and person. This is dispute evidence, and it's the reason a prize is defensible."],
+    ["2","One-click database download. The whole night is a single file — grab it between rounds."],
+    ["4","Two different backups doing two different jobs. The database recovers a crashed night; the JSON moves content between machines and reuses it next time."],
+    ["5","Config import is how the laptop build reaches the VPS: export locally, import remotely, upload the media folder."],
+    ["3","Destructive actions disabled while the event is live. Not hidden, disabled, with the reason showing."]
+  ]
+}
+];
+
+let idx=0;
+const $s=document.getElementById("steps"),$st=document.getElementById("stage"),$n=document.getElementById("notes");
+function render(){
+  $s.innerHTML="";
+  STATES.forEach((s,i)=>{const b=document.createElement("button");b.className="step";b.textContent=s.label;
+    b.setAttribute("aria-selected",i===idx);b.onclick=()=>{idx=i;render();};$s.appendChild(b);});
+  const st=STATES[idx];
+  $st.innerHTML=`<div class="device"><span class="tag">Admin</span><div class="screen">${st.html}</div></div>`;
+  $n.innerHTML=st.notes.map(n=>`<div class="note"><span class="pin">${n[0]}</span><span>${n[1]}</span></div>`).join("");
+}
+render();
+</script>
+</body>
+</html>

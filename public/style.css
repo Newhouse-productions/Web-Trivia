@@ -1,0 +1,151 @@
+:root {
+  color-scheme: light;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-selected: #eef2ff;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --border: #d1d5db;
+  --accent: #4338ca;
+  --accent-text: #ffffff;
+  --error: #b91c1c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, sans-serif;
+  padding: 16px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+h1 { font-size: 1.25rem; margin: 16px 0; }
+
+label { display: block; margin-bottom: 8px; font-weight: 600; }
+
+input {
+  width: 100%;
+  font-size: 16px;
+  padding: 12px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+input:focus-visible, button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  min-height: 44px;
+  min-width: 44px;
+  font-size: 16px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button[type="submit"] {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+button:disabled { opacity: 0.6; cursor: default; }
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.option {
+  text-align: left;
+  border-width: 2px;
+  width: 100%;
+}
+
+.option.selected {
+  border-color: var(--accent);
+  background: var(--surface-selected);
+  font-weight: 700;
+}
+
+.option:disabled { opacity: 0.75; cursor: default; }
+
+.error {
+  color: var(--error);
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+.note, .team-line { color: var(--text-muted); }
+
+.result { font-weight: 600; }
+
+.sync {
+  margin-top: 20px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+/* Correct/wrong use border style plus a text badge, never colour alone
+   (CLAUDE.md #16). */
+.option.correct { border-style: solid; border-color: #15803d; }
+.option.incorrect { border-style: dashed; border-color: var(--error); }
+
+.badge { display: inline-block; margin-left: 8px; font-weight: 700; }
+.badge.correct { color: #15803d; }
+.badge.incorrect { color: var(--error); }
+
+.vitals { font-weight: 600; margin-bottom: 12px; }
+
+.question-list { display: flex; flex-direction: column; gap: 10px; }
+
+.question-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.question-row span { flex: 1 1 200px; }
+
+.question-image { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+.video-wrap iframe { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+
+/* Pause hides the question — not greyed, hidden (CLAUDE.md #17) — but sits
+   over the play view without destroying it, so a half-typed draft survives
+   underneath. */
+.paused-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 1.25rem;
+  z-index: 100;
+}

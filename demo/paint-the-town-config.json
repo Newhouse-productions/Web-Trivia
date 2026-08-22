@@ -1,0 +1,480 @@
+{
+  "schema_version": 1,
+  "exported_at": "2026-08-22T10:30:00Z",
+  "event": {
+    "name": "Paint the Town",
+    "subtitle": "Dress the colour, be the colour",
+    "date": "2026-09-11",
+    "time": "6:00 PM – 10:00 PM",
+    "venue": "Brunswick South-West Primary School, Hall",
+    "entry_fee": "$30 per team",
+    "beneficiary": "School Fundraising",
+    "theme": {
+      "layout": "standard",
+      "colour": {
+        "bg": "#0F172A",
+        "bg2": "#1E293B",
+        "surface": "#1E293B",
+        "text": "#F1F5F9",
+        "text-muted": "#94A3B8",
+        "accent": "#EC4899",
+        "accent-text": "#FFF"
+      },
+      "chrome": {
+        "title": "Paint the Town",
+        "subtitle": "Dress the colour, be the colour",
+        "logo_light": "logo-bswp-light-bg.png",
+        "logo_dark": "logo-bswp-dark-bg.png",
+        "footer": "Brunswick South-West Primary School · Proudly supporting our community"
+      }
+    },
+    "settings": {
+      "poll_interval_ms": 3000,
+      "timer_enabled": true,
+      "timer_duration_seconds": 60,
+      "leaderboard_cadence": "every_round",
+      "allow_team_name_edit_until": "round_1_starts"
+    }
+  },
+
+  "rounds": [
+    {
+      "number": 1,
+      "theme": {
+        "layout": "standard",
+        "colour": {
+          "bg": "#1E293B",
+          "accent": "#3B82F6"
+        }
+      }
+    },
+    {
+      "number": 2,
+      "theme": {
+        "layout": "media",
+        "colour": {
+          "bg": "#1E293B",
+          "accent": "#8B5CF6"
+        }
+      }
+    },
+    {
+      "number": 3,
+      "theme": {
+        "layout": "standard",
+        "colour": {
+          "bg": "#0F172A",
+          "accent": "#EC4899"
+        }
+      }
+    }
+  ],
+
+  "questions": [
+    {
+      "round": 1,
+      "order_no": 1,
+      "type": "mcq",
+      "points": 1,
+      "prompt": "Which Australian city hosted the 2000 Summer Olympics?",
+      "options": ["Melbourne", "Sydney", "Brisbane", "Perth"],
+      "correct_answer": "Sydney",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 2,
+      "type": "text",
+      "points": 2,
+      "prompt": "What is the capital of Australia?",
+      "correct_answer": "Canberra",
+      "aliases": ["canberra", "act"],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 3,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "In what year did the Titanic sink?",
+      "options": ["1912", "1915", "1910", "1920"],
+      "correct_answer": "1912",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 4,
+      "type": "text",
+      "points": 2,
+      "prompt": "Who wrote 'Romeo and Juliet'?",
+      "correct_answer": "William Shakespeare",
+      "aliases": ["shakespeare", "william shakespear", "wm shakespeare"],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 5,
+      "type": "mcq",
+      "points": 1,
+      "prompt": "Which planet is known as the Red Planet?",
+      "options": ["Venus", "Mars", "Jupiter", "Saturn"],
+      "correct_answer": "Mars",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 6,
+      "type": "text",
+      "points": 3,
+      "prompt": "What is the smallest prime number?",
+      "correct_answer": "2",
+      "aliases": ["two"],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 7,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "How many sides does a hexagon have?",
+      "options": ["5", "6", "7", "8"],
+      "correct_answer": "6",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 8,
+      "type": "text",
+      "points": 2,
+      "prompt": "In which country would you find the Great Wall?",
+      "correct_answer": "China",
+      "aliases": ["china", "chinese"],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 9,
+      "type": "mcq",
+      "points": 1,
+      "prompt": "What is the largest ocean on Earth?",
+      "options": ["Atlantic", "Indian", "Arctic", "Pacific"],
+      "correct_answer": "Pacific",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 1,
+      "order_no": 10,
+      "type": "text",
+      "points": 3,
+      "prompt": "How many strings does a standard violin have?",
+      "correct_answer": "4",
+      "aliases": ["four"],
+      "theme": null
+    },
+
+    {
+      "round": 2,
+      "order_no": 11,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "Who painted the Mona Lisa?",
+      "options": ["Michelangelo", "Leonardo da Vinci", "Raphael", "Donatello"],
+      "correct_answer": "Leonardo da Vinci",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 12,
+      "type": "text",
+      "points": 2,
+      "prompt": "What year did the Berlin Wall fall?",
+      "correct_answer": "1989",
+      "aliases": ["1989", "nineteen eighty nine"],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 13,
+      "type": "mcq",
+      "points": 1,
+      "prompt": "Which mammal lays eggs?",
+      "options": ["Kangaroo", "Platypus", "Koala", "Wombat"],
+      "correct_answer": "Platypus",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 14,
+      "type": "text",
+      "points": 3,
+      "prompt": "What is the chemical symbol for gold?",
+      "correct_answer": "Au",
+      "aliases": ["au", "gold"],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 15,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "In which decade was the internet invented?",
+      "options": ["1960s", "1970s", "1980s", "1990s"],
+      "correct_answer": "1970s",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 16,
+      "type": "text",
+      "points": 2,
+      "prompt": "What is the currency of Japan?",
+      "correct_answer": "Yen",
+      "aliases": ["yen", "jpy"],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 17,
+      "type": "mcq",
+      "points": 1,
+      "prompt": "Which Australian animal is not a marsupial?",
+      "options": ["Koala", "Wombat", "Emu", "Possum"],
+      "correct_answer": "Emu",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 18,
+      "type": "text",
+      "points": 2,
+      "prompt": "How many bones are in the adult human body?",
+      "correct_answer": "206",
+      "aliases": ["206", "two hundred and six"],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 19,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "What is the smallest country in the world by area?",
+      "options": ["Monaco", "San Marino", "Vatican City", "Liechtenstein"],
+      "correct_answer": "Vatican City",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 2,
+      "order_no": 20,
+      "type": "text",
+      "points": 3,
+      "prompt": "In which year did the Eiffel Tower open to the public?",
+      "correct_answer": "1889",
+      "aliases": ["1889", "eighteen eighty nine"],
+      "theme": null
+    },
+
+    {
+      "round": 3,
+      "order_no": 21,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "What is the deepest ocean trench on Earth?",
+      "options": ["Mariana Trench", "Kuril-Kamchatka Trench", "Philippine Trench", "Tonga Trench"],
+      "correct_answer": "Mariana Trench",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 22,
+      "type": "text",
+      "points": 2,
+      "prompt": "How many continents are there?",
+      "correct_answer": "7",
+      "aliases": ["seven", "7"],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 23,
+      "type": "mcq",
+      "points": 3,
+      "prompt": "Which element has the atomic number 1?",
+      "options": ["Helium", "Hydrogen", "Lithium", "Boron"],
+      "correct_answer": "Hydrogen",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 24,
+      "type": "text",
+      "points": 2,
+      "prompt": "What is the longest river in the world?",
+      "correct_answer": "Nile River",
+      "aliases": ["nile", "nile river"],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 25,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "Which country has the most volcanoes?",
+      "options": ["Philippines", "Indonesia", "Japan", "Mexico"],
+      "correct_answer": "Indonesia",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 26,
+      "type": "text",
+      "points": 3,
+      "prompt": "In what year did Australia become a federation?",
+      "correct_answer": "1901",
+      "aliases": ["1901", "nineteen oh one"],
+      "theme": {
+        "layout": "statement",
+        "colour": {
+          "accent": "#10B981"
+        }
+      }
+    },
+    {
+      "round": 3,
+      "order_no": 27,
+      "type": "mcq",
+      "points": 2,
+      "prompt": "Which tree species is native to Australia and produces eucalyptus oil?",
+      "options": ["Banyan", "Eucalyptus", "Acacia", "Baobab"],
+      "correct_answer": "Eucalyptus",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 28,
+      "type": "text",
+      "points": 3,
+      "prompt": "What is the Australian Aboriginal word for the spirit of an ancestor?",
+      "correct_answer": "Dreamtime",
+      "aliases": ["dreamtime", "dream time"],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 29,
+      "type": "mcq",
+      "points": 1,
+      "prompt": "Which Australian state capital is also the name of a river?",
+      "options": ["Adelaide", "Perth", "Brisbane", "Melbourne"],
+      "correct_answer": "Brisbane",
+      "aliases": [],
+      "theme": null
+    },
+    {
+      "round": 3,
+      "order_no": 30,
+      "type": "text",
+      "points": 5,
+      "prompt": "In which Victorian town would you find the Grampians National Park?",
+      "correct_answer": "Halls Gap",
+      "aliases": ["halls gap", "grampians"],
+      "theme": {
+        "layout": "statement",
+        "colour": {
+          "accent": "#F59E0B"
+        }
+      }
+    },
+
+    {
+      "is_practice": true,
+      "type": "mcq",
+      "points": 0,
+      "prompt": "What colour is the sky on a clear day?",
+      "options": ["Blue", "Green", "Red", "Yellow"],
+      "correct_answer": "Blue",
+      "theme": null
+    },
+
+    {
+      "is_reserve": true,
+      "type": "text",
+      "points": 5,
+      "prompt": "In what year was the first Melbourne Cup horse race held?",
+      "correct_answer": "1861",
+      "aliases": ["1861", "eighteen sixty one"],
+      "theme": null
+    }
+  ],
+
+  "tables": [
+    { "table_number": "1",   "seats": 8,  "colour": { "type": "block",    "from": "#C2410C" } },
+    { "table_number": "2",   "seats": 8,  "colour": { "type": "gradient", "from": "#1D4ED8", "to": "#1E3A8A", "angle": 135 } },
+    { "table_number": "3",   "seats": 10, "colour": { "type": "block",    "from": "#15803D" } },
+    { "table_number": "4",   "seats": 8,  "colour": { "type": "block",    "from": "#DC2626" } },
+    { "table_number": "5",   "seats": 6,  "colour": { "type": "gradient", "from": "#F59E0B", "to": "#D97706", "angle": 90 } },
+    { "table_number": "6",   "seats": 8,  "colour": { "type": "block",    "from": "#7C3AED" } },
+    { "table_number": "7",   "seats": 8,  "colour": { "type": "block",    "from": "#EC4899" } },
+    { "table_number": "8",   "seats": 10, "colour": { "type": "block",    "from": "#06B6D4" } },
+    { "table_number": "9",   "seats": 6,  "colour": { "type": "gradient", "from": "#8B5CF6", "to": "#5B21B6", "angle": 45 } },
+    { "table_number": "10",  "seats": 8,  "colour": { "type": "block",    "from": "#059669" } },
+    { "table_number": "11",  "seats": 8,  "colour": { "type": "block",    "from": "#EA580C" } },
+    { "table_number": "12",  "seats": 8,  "colour": { "type": "gradient", "from": "#3B82F6", "to": "#1E40AF", "angle": 135 } },
+    { "table_number": "13",  "seats": 10, "colour": { "type": "block",    "from": "#16A34A" } },
+    { "table_number": "14",  "seats": 6,  "colour": { "type": "block",    "from": "#DC2626" } },
+    { "table_number": "15",  "seats": 8,  "colour": { "type": "gradient", "from": "#FBBF24", "to": "#F59E0B", "angle": 90 } },
+    { "table_number": "16",  "seats": 8,  "colour": { "type": "block",    "from": "#6366F1" } },
+    { "table_number": "17",  "seats": 8,  "colour": { "type": "block",    "from": "#DB2777" } },
+    { "table_number": "18",  "seats": 10, "colour": { "type": "block",    "from": "#0891B2" } },
+    { "table_number": "19",  "seats": 6,  "colour": { "type": "block",    "from": "#7C2D12" } },
+    { "table_number": "20",  "seats": 8,  "colour": { "type": "block",    "from": "#1F2937" } },
+    { "table_number": "12A", "seats": 6,  "colour": null }
+  ],
+
+  "media_manifest": [
+    { "file": "logo-bswp-original.png",  "original_name": "BSWP-Official-Logo.png", "bytes": 32276, "width": 455 },
+    { "file": "logo-bswp-light-bg.png",  "original_name": "logo-bswp-light-bg.png", "bytes": 27648, "width": 480 },
+    { "file": "logo-bswp-dark-bg.png",   "original_name": "logo-bswp-dark-bg.png",  "bytes": 28672, "width": 480 },
+    { "file": "logo-bswp-icon.png",      "original_name": "logo-bswp-icon.png",     "bytes": 13312, "width": 200 }
+  ],
+
+  "_metadata": {
+    "event_type": "school_fundraiser",
+    "beneficiary": "Brunswick South-West Primary School",
+    "organiser": "BSWP PFA",
+    "created_by": "trivia_admin",
+    "notes": "Paint the Town colour-themed fundraising trivia night. Teams select colour tables. Casual, inclusive event for families and school community."
+  },
+
+  "_notes": {
+    "never_exported": [
+      "answers", "marks", "bonuses", "players", "team names",
+      "table tokens", "screen token", "passphrase", "PINs", "audit log"
+    ],
+    "on_import": [
+      "Creates a NEW event. Never overwrites an existing one.",
+      "Tokens, screen token, passphrase and PINs are always regenerated.",
+      "Media files are referenced by name — upload the media folder alongside.",
+      "Validated against schema_version before anything is written.",
+      "Blocked once an event has started."
+    ],
+    "question_notes": {
+      "round_1": "Introduction round — mix of difficulty to warm up teams. Blue accent colour theme.",
+      "round_2": "Media round — supports audio/video questions in questions 11-20. Purple accent. Can feature images or video clips.",
+      "round_3": "Final round with higher point values. Australian-themed questions (26, 28, 30) for local school connection. Pink/orange accent."
+    }
+  }
+}
