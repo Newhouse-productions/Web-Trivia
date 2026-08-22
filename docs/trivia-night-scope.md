@@ -1,6 +1,6 @@
 # Trivia Night — Scope
 
-*v0.4 — 22 Aug 2026. Supersedes v0.3.*
+*v0.5 — 22 Aug 2026.*
 *Technical detail in `trivia-technical-design.md`. Review history in `trivia-architecture-review.md`.*
 
 ---
@@ -325,7 +325,8 @@ questions, rehearsal logistics, prizes, printing and spare codes.
 
 ## 11. Next steps
 
-1. Build the question template
-2. Build P0 in the slices listed in `CLAUDE.md`
-3. Deploy to the VPS in week one, before the app is finished
-4. Rehearse on site with a dozen real phones and run the acceptance list
+1. Run `trivia-enablement-instructions.md` — toolchain, smoke server, tunnel, phone test
+2. Author the questions in `trivia-import-template.xlsx`
+3. Build P0 in the slices listed in `CLAUDE.md`, locally
+4. Provision the VPS at two weeks out, or sooner if rehearsing with other people
+5. Rehearse on site with a dozen real phones and run the acceptance list

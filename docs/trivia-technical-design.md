@@ -1,6 +1,6 @@
 # Technical design
 
-*v0.4 · 22 Aug 2026 · companion to `trivia-night-scope.md`*
+*v0.5 · 22 Aug 2026 · companion to `trivia-night-scope.md`*
 *All findings in `trivia-architecture-review.md` are resolved in this version.*
 
 ---
@@ -1234,18 +1234,14 @@ looks live. Stop polling once it's received.
 Built and tested on Windows, exposed through a **Cloudflare Tunnel**. Production is Linux on
 a VPS behind the same Cloudflare edge.
 
-### 17.1 Why the tunnel beats a private network here
+### 17.1 Why a tunnel rather than a private network
 
-- **Any phone can reach it.** No enrolment, no client software, no account. Which means
-  rehearsal with real attendees' phones is possible on the dev build — a genuine constraint
-  under a private-network approach, now gone.
-- **You test the production path.** Cloudflare sits in front of dev exactly as it will in
-  front of the VPS, so cache behaviour, headers and rate limiting rules are exercised for
-  real rather than discovered later.
+- **Any phone can reach it.** No enrolment, no client software, no account — so rehearsal
+  with real attendees' phones is possible on the dev build.
 - **No inbound firewall rules.** `cloudflared` makes an outbound connection, so the Windows
-  firewall problem simply doesn't arise.
-- **Real HTTPS.** TLS terminates at the edge, so `Secure` cookies work and the browser gets
-  a valid certificate against a hostname.
+  firewall problem doesn't arise.
+- **Real HTTPS.** TLS terminates at the edge, so `Secure` cookies work against a valid
+  certificate.
 
 ### 17.1a No absolute URLs, anywhere
 
@@ -1258,50 +1254,48 @@ it makes the eventual move to a real domain a configuration change rather than a
 The only residual cost of a changing hostname is session cookies, which are scoped per host —
 test devices re-enter the passphrase after a restart. Nothing else breaks.
 
-### 17.2 Named versus quick tunnels
+### 17.2 Quick tunnel during the build
 
 ```
 cloudflared tunnel --url http://localhost:3000
 ```
 
-is fine for a five-minute check and wrong for repeat testing, because the
-`*.trycloudflare.com` hostname **changes on every restart**. That invalidates printed QR
-codes and, more subtly, every session cookie — cookies are scoped per hostname, so a restart
-silently logs out every test device.
+A fresh `*.trycloudflare.com` hostname every restart, no domain and no DNS wait. Given 17.1a,
+the churn costs one passphrase re-entry per test device.
 
-Instead: a named tunnel on a subdomain of the real domain.
+A `dev.ps1` that starts the app and the tunnel, greps the hostname from cloudflared's log and
+prints it as a terminal QR makes a restart a three-second operation.
 
-```
-cloudflared tunnel create trivia-dev
-cloudflared tunnel route dns trivia-dev dev.example.com
-cloudflared tunnel run trivia-dev
-```
+**A named tunnel on a real subdomain becomes worth it later** — when QR codes need printing,
+when several people are testing at once, or when the VPS arrives. Not before.
 
-Stable hostname, stable cookies, printable QR codes, and `cloudflared` can install as a
-Windows service so it survives a reboot.
+### 17.3 The dev host is public and cannot be gated
 
-### 17.3 The tunnel is public — treat it that way
+This is the real trade. A `trycloudflare.com` hostname is on the public internet, and
+**Cloudflare Access cannot be put in front of it** — you don't control that zone.
 
-This is the real trade against a private network. Anything reachable through the tunnel is
-reachable by anyone who learns the hostname, and scanners will find it eventually.
+- Passphrase and PIN gates in the app **from the first session that stores anything**, not
+  "later".
+- Different passphrase and PIN values from the live event, so a leak from dev doesn't open
+  the night.
+- No real personal data in dev, ever.
+- Stop the tunnel when not testing. An app on localhost is unreachable; a tunnel is not.
 
-- **Turn the passphrase and PIN gates on from day one.** Don't leave them until "later" on a
-  publicly routable host, and never leave PINs at a placeholder value.
-- Put **Cloudflare Access** in front of the dev hostname while building. It costs nothing at
-  this scale and removes the exposure entirely — then take it off for the rehearsal, when you
-  need real phones to reach it.
-- Never load real personal data into the dev instance.
-- Use a different passphrase and different PINs from the live event, so a leak from dev
-  doesn't open the night.
+The hostname is long and random, so drive-by discovery is unlikely. That is not protection
+and must never be treated as any.
 
-### 17.4 Cache headers get tested for free
+### 17.4 Two production behaviours cannot be verified here
 
-Cloudflare will happily cache `/v` and freeze the version number for every device — the
-failure that stops the whole room updating.
+A quick tunnel gives no zone control, so there are no cache rules, no WAF and no rate limiting
+to exercise. Both of the following must be built blind and verified on the first VPS deploy:
 
-Running dev behind the same edge means you hit that bug in week one on your own phone rather
-than on the night with 240. Set `no-store` on `/v`, `/state` and `/answer`, and confirm it in
-dev.
+- **`Cache-Control: no-store` on `/v`, `/state`, `/answer`.** Cloudflare caching `/v` freezes
+  the version number for every device — the failure that stops the whole room updating.
+- **Lowercase every uploaded filename on import.** Windows treats `Opera.webp` and
+  `opera.webp` as one file; Linux does not, so media that works here 404s on the VPS.
+
+Load testing should run against **localhost**, not the tunnel — you want the application's
+numbers, not Cloudflare's.
 
 ### 17.5 Windows traps that remain
 
@@ -1320,11 +1314,17 @@ column of every row gains an invisible character and alias matching quietly fail
 **better-sqlite3** is a native module. It normally installs from a prebuilt binary; if it
 compiles, it needs Visual Studio Build Tools. Sort that on day one.
 
-### 17.6 Deploy to the VPS in week one
+### 17.6 When to move to the VPS
 
-Even with the same edge in front of both, the origin still differs — Linux, systemd, Caddy,
-file permissions, case-sensitive paths. Deploy with almost nothing built, so those surface
-while they're trivial.
+Local-first is the plan: build the whole app before provisioning a server. Move when any of
+these is true:
+
+- P0 works end to end on your phone
+- You want to rehearse with people who aren't you
+- You are **two weeks** from the event
+
+That last one is a hard line. The VPS step contains DNS propagation, certificate issuance and
+possible identity verification — all fine with slack, all fatal on the day.
 
 ---
 
