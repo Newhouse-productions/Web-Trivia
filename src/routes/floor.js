@@ -8,9 +8,10 @@ import { makeAuditLogger } from '../audit.js';
 export function registerFloorRoutes(app, { db, q }) {
   const logAudit = makeAuditLogger(db);
   const getTeamsWithStatus = db.prepare(`
-    SELECT t.id AS team_id, t.table_number, t.team_name, t.captain_player_id,
+    SELECT t.id AS team_id, t.table_number, t.team_name, t.captain_player_id, t.last_seen_at,
            (SELECT COUNT(*) FROM players p WHERE p.team_id = t.id) AS player_count,
-           (SELECT username FROM players p WHERE p.id = t.captain_player_id) AS captain_name
+           (SELECT username FROM players p WHERE p.id = t.captain_player_id) AS captain_name,
+           (SELECT COUNT(*) FROM answers a WHERE a.team_id = t.id AND a.question_id = ?) AS answered_current
     FROM teams t WHERE t.event_id = ? AND t.archived = 0
     ORDER BY t.table_number
   `);
@@ -32,10 +33,18 @@ export function registerFloorRoutes(app, { db, q }) {
     return { ops, event };
   }
 
+  app.get('/floor/v', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    return { version: ctx.event.version };
+  });
+
   app.get('/floor/teams', async (req, reply) => {
     const ctx = requireFloor(req, reply);
     if (!ctx) return;
-    return { teams: getTeamsWithStatus.all(ctx.event.id) };
+    const es = q.getEventState.get(ctx.event.id);
+    const currentId = es.current_question_id || 0;
+    return { teams: getTeamsWithStatus.all(currentId, ctx.event.id), question_open: es.question_status === 'OPEN' };
   });
 
   app.get('/floor/team/:id', async (req, reply) => {

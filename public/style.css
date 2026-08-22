@@ -31,6 +31,7 @@ body {
 }
 
 h1 { font-size: 1.25rem; margin: 16px 0; }
+h1.statement-prompt { font-size: 1.6rem; font-weight: 800; }
 
 label { display: block; margin-bottom: 8px; font-weight: 600; }
 
@@ -105,6 +106,15 @@ button:disabled { opacity: 0.6; cursor: default; }
   background: var(--surface);
   color: var(--text-muted);
 }
+
+.stale-banner {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.stale-banner.note { background: var(--surface); color: var(--text-muted); }
+.stale-banner.error { background: #fef2f2; color: var(--error); border: 1px solid var(--error); }
 
 /* Correct/wrong use border style plus a text badge, never colour alone
    (CLAUDE.md #16). */

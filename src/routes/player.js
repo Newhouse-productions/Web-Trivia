@@ -48,6 +48,9 @@ export function registerPlayerRoutes(app, { db, q }) {
     const session = readSession(req);
     const ctx = q.resolveSessionContext(session);
     if (!ctx) return reply.code(401).send({ error: 'no_session' });
+    // Presence for the host/floor "is this table still with us" views —
+    // informational only, never bumps table_version (a poll isn't a change).
+    q.touchLastSeen.run(new Date().toISOString(), ctx.team.id);
     // Two independent counters, not merged into one (CLAUDE.md #5). A
     // max() of two independently-incrementing values isn't injective —
     // once table_version numerically overtakes event_version (it does
@@ -90,6 +93,26 @@ export function registerPlayerRoutes(app, { db, q }) {
       };
     }
 
+    // A published round shows the leaderboard on the phone too, not just the
+    // big screen — the room reads their own result while marking wraps up.
+    const es = q.getEventState.get(event.id);
+    if (es.round_phase === 'PUBLISHED') {
+      const round = q.getPublishedRound.get(event.id);
+      if (round) {
+        const board = JSON.parse(round.published_leaderboard);
+        const place = board.findIndex((r) => r.team_id === team.id);
+        return {
+          stage: 'leaderboard',
+          event_version: event.version,
+          table_version: team.table_version,
+          round: round.number,
+          leaderboard: board,
+          our_place: place === -1 ? null : place + 1,
+          team: { table_number: team.table_number, team_name: team.team_name }
+        };
+      }
+    }
+
     const current = q.getCurrentQuestion.get(event.id);
     const ourAnswer = current ? q.getAnswer.get(team.id, current.question_id) : null;
     const captain = team.captain_player_id ? q.getPlayerById.get(team.captain_player_id) : null;
@@ -99,11 +122,13 @@ export function registerPlayerRoutes(app, { db, q }) {
       event_version: event.version,
       table_version: team.table_version,
       round: current ? current.round : null,
+      theme: q.resolveCurrentTheme(event, current),
       question: current ? q.playerQuestionPayload(current) : null,
       our_answer: current ? q.playerAnswerPayload(ourAnswer, current.question_status) : null,
       team: {
         table_number: team.table_number,
         team_name: team.team_name,
+        score: q.teamScore(team.id),
         is_captain: team.captain_player_id === player.id,
         captain_player_id: team.captain_player_id,
         captain_name: captain ? captain.username : null

@@ -1,6 +1,8 @@
 // Prepared statements and payload builders shared by the player and ops
 // route modules. Payloads are built by naming fields to include, never by
 // deleting sensitive ones (CLAUDE.md #1).
+import { resolveTheme } from './theme.js';
+
 export function buildQueries(db) {
   const getEventById = db.prepare('SELECT * FROM events WHERE id = ?');
   const getTeamById = db.prepare('SELECT * FROM teams WHERE id = ?');
@@ -20,17 +22,23 @@ export function buildQueries(db) {
   );
   const bumpTableVersion = db.prepare('UPDATE teams SET table_version = table_version + 1 WHERE id = ?');
   const bumpEventVersion = db.prepare('UPDATE events SET version = version + 1 WHERE id = ? RETURNING version');
+  // Presence only — never bumps table_version. A poll isn't a change; bumping
+  // version here would make every /v call look like new state to fetch.
+  const touchLastSeen = db.prepare('UPDATE teams SET last_seen_at = ? WHERE id = ?');
 
   const getEventState = db.prepare('SELECT * FROM event_state WHERE event_id = ?');
   const setEventStateQuestion = db.prepare(
     'UPDATE event_state SET current_question_id = ?, question_status = ? WHERE event_id = ?'
   );
   const setRoundPhase = db.prepare('UPDATE event_state SET round_phase = ? WHERE event_id = ?');
+  const getPublishedRound = db.prepare(
+    "SELECT * FROM rounds WHERE event_id = ? AND phase = 'PUBLISHED' ORDER BY number DESC LIMIT 1"
+  );
 
   const getCurrentQuestion = db.prepare(`
     SELECT es.question_status, q.id AS question_id, q.event_id, q.round, q.type, q.prompt,
            q.options, q.correct_answer, q.aliases, q.points, q.image_ref, q.image_alt,
-           q.video_url, q.av_cue, q.is_practice
+           q.video_url, q.av_cue, q.is_practice, q.theme
     FROM event_state es
     JOIN questions q ON q.id = es.current_question_id
     WHERE es.event_id = ?
@@ -38,6 +46,16 @@ export function buildQueries(db) {
   const getMediaHash = db.prepare(
     'SELECT sha256 FROM media_manifest WHERE event_id = ? AND filename = ?'
   );
+  const getRoundByNumber = db.prepare('SELECT theme FROM rounds WHERE event_id = ? AND number = ?');
+
+  // Resolved server-side; the client never sees the cascade (CLAUDE.md #21).
+  function resolveCurrentTheme(event, current) {
+    const eventTheme = event.theme ? JSON.parse(event.theme) : null;
+    const roundRow = current && current.round ? getRoundByNumber.get(event.id, current.round) : null;
+    const roundTheme = roundRow?.theme ? JSON.parse(roundRow.theme) : null;
+    const questionTheme = current?.theme ? JSON.parse(current.theme) : null;
+    return resolveTheme({ eventTheme, roundTheme, questionTheme });
+  }
 
   function resolveMediaUrl(eventId, filename) {
     if (!filename) return null;
@@ -50,6 +68,18 @@ export function buildQueries(db) {
   );
 
   const getAnswer = db.prepare('SELECT * FROM answers WHERE team_id = ? AND question_id = ?');
+  // Scores are derived on read, never stored (CLAUDE.md #13).
+  const getTeamScore = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
+      (SELECT COALESCE(SUM(points), 0) FROM bonuses b WHERE b.team_id = ?) AS bonus_points
+    FROM answers a JOIN questions q ON q.id = a.question_id
+    WHERE a.team_id = ?
+  `);
+  function teamScore(teamId) {
+    const row = getTeamScore.get(teamId, teamId);
+    return row.answer_points + row.bonus_points;
+  }
   const upsertAnswer = db.prepare(`
     INSERT INTO answers (event_id, team_id, question_id, value, submitted_by, submitted_at, is_correct)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -117,16 +147,17 @@ export function buildQueries(db) {
       av_cue: row.av_cue,
       is_practice: !!row.is_practice,
       is_reserve: !!row.is_reserve,
+      theme: row.theme ? JSON.parse(row.theme) : (row.layout ? { layout: row.layout } : null),
       state: questionStatus
     };
   }
 
   return {
     getEventById, getTeamById, getTeamByToken, getPlayerById, getTeamUsernames,
-    insertPlayer, assignCaptainIfEmpty, setCaptainCas, bumpTableVersion, bumpEventVersion,
-    getEventState, setEventStateQuestion, setRoundPhase,
+    insertPlayer, assignCaptainIfEmpty, setCaptainCas, bumpTableVersion, bumpEventVersion, touchLastSeen,
+    getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
-    getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl,
+    getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }

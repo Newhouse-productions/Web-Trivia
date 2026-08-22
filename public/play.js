@@ -100,6 +100,63 @@
     if (state.stage === 'gate') return renderGate();
     if (state.stage === 'name') return renderName(state.team);
     if (state.stage === 'play') return enterPlay(state);
+    if (state.stage === 'leaderboard') return renderLeaderboard(state);
+  }
+
+  function renderLeaderboard(state) {
+    const heading = document.createElement('p');
+    heading.textContent = `Table ${state.team.table_number}${state.team.team_name ? ' — ' + state.team.team_name : ''}`;
+    const title = document.createElement('h1');
+    title.textContent = `Leaderboard — Round ${state.round}`;
+    app.append(heading, title);
+
+    if (state.our_place) {
+      const place = document.createElement('p');
+      place.className = 'note';
+      place.textContent = `Your table: ${ordinal(state.our_place)} place`;
+      app.appendChild(place);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'options';
+    state.leaderboard.forEach((row, i) => {
+      const line = document.createElement('div');
+      line.className = 'option' + (state.our_place === i + 1 ? ' selected' : '');
+      const rank = document.createElement('span');
+      rank.textContent = `${i + 1}. ${row.team_name}`;
+      const score = document.createElement('span');
+      score.textContent = String(row.score);
+      score.style.float = 'right';
+      line.append(rank, score);
+      list.appendChild(line);
+    });
+    app.appendChild(list);
+  }
+
+  // Shown honestly: without a push channel the client can't tell "nothing
+  // changed" from "unreachable for two minutes" (technical-design §5).
+  function renderStaleness(elapsedMs) {
+    if (!playEls || !playEls.staleBanner) return;
+    const banner = playEls.staleBanner;
+    if (elapsedMs < 10000) {
+      banner.style.display = 'none';
+      return;
+    }
+    banner.style.display = '';
+    if (elapsedMs < 30000) {
+      banner.className = 'stale-banner note';
+      banner.textContent = 'Reconnecting…';
+    } else {
+      banner.className = 'stale-banner error';
+      const secs = Math.round(elapsedMs / 1000);
+      banner.textContent = `Out of date — last update ${secs}s ago. Tap Sync now below.`;
+    }
+  }
+
+  function ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
   function renderGate() {
@@ -206,6 +263,12 @@
   function enterPlay(state) {
     playEls = {};
 
+    const staleBanner = document.createElement('p');
+    staleBanner.className = 'stale-banner';
+    staleBanner.style.display = 'none';
+    app.appendChild(staleBanner);
+    playEls.staleBanner = staleBanner;
+
     const teamLine = document.createElement('p');
     teamLine.className = 'team-line';
     app.appendChild(teamLine);
@@ -282,17 +345,35 @@
     updatePlay(state);
 
     if (!pollHandle) {
-      pollHandle = window.Poll.start({ onState: render });
+      pollHandle = window.Poll.start({ onState: render, onStaleness: renderStaleness });
     }
+  }
+
+  // The resolved theme paints phone content, matching the projector for the
+  // same question (CLAUDE.md #19). Team colour is the header band only and
+  // never touches this (CLAUDE.md #18) — teamLine keeps its own class.
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.body.style;
+    const c = theme.colour;
+    root.setProperty('--bg', c.bg);
+    root.setProperty('--surface', c.surface);
+    root.setProperty('--surface-selected', c['surface-selected']);
+    root.setProperty('--text', c.text);
+    root.setProperty('--text-muted', c['text-muted']);
+    root.setProperty('--border', c.border);
+    root.setProperty('--accent', c.accent);
+    root.setProperty('--accent-text', c['accent-text']);
   }
 
   function updatePlay(state) {
     if (!playEls) { enterPlay(state); return; }
     latestPlayState = state;
+    applyTheme(state.theme);
 
     const team = state.team;
     playEls.teamLine.textContent =
-      `Table ${team.table_number}${team.team_name ? ' — ' + team.team_name : ''}` +
+      `Table ${team.table_number}${team.team_name ? ' — ' + team.team_name : ''} · Score ${team.score}` +
       (team.is_captain
         ? ' — you are answering'
         : team.captain_name ? ` — ${team.captain_name} is answering` : ' — no captain yet');
@@ -341,6 +422,21 @@
 
     const isOpen = state.question.state === 'OPEN';
     const isRevealed = state.question.state === 'REVEALED';
+    const layout = state.theme ? state.theme.layout : 'standard';
+
+    playEls.prompt.classList.toggle('statement-prompt', layout === 'statement');
+
+    // Media layout holds phones on a neutral "listen up" screen while the
+    // clip plays on the venue system — stops people reading ahead
+    // (Mockups/trivia-host-console.html note on the AV-cue state).
+    if (layout === 'media' && !isOpen && !isRevealed) {
+      playEls.prompt.textContent = 'Listen up…';
+      playEls.image.style.display = 'none';
+      clear(playEls.optionsWrap);
+      playEls.textWrap.style.display = 'none';
+      playEls.note.textContent = 'The answer opens once the clip finishes.';
+      return;
+    }
     const isNewQuestion = playEls.lastQuestionId !== state.question.id;
     playEls.lastQuestionId = state.question.id;
 

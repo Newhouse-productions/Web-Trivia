@@ -114,6 +114,7 @@ export function registerScreenRoutes(app, { db, q }) {
       version: event.version,
       event_name: event.name,
       round: current.round,
+      theme: q.resolveCurrentTheme(event, current),
       question: payload,
       answered: { count: answeredTotal, total: teamTotal }
     };

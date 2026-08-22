@@ -76,6 +76,7 @@
           if (data.role === 'host') startHost();
           else if (data.role === 'marker') startMarker();
           else if (data.role === 'admin') startAdmin();
+          else if (data.role === 'floor') startFloor();
           else renderNotBuilt(data.role);
         } else if (res.status === 423) {
           error.textContent = 'This role is locked after too many failed attempts.';
@@ -145,12 +146,20 @@
 
   function renderHost(state) {
     lastState = state;
-    hostEls.vitals.textContent =
-      `Round phase: ${state.round_phase} — version ${state.version}` +
-      (state.current ? ` — current: Q${state.current.id} (${state.current.state})` : ' — no current question');
+    const parts = [
+      state.round_progress
+        ? `Round ${state.round_progress.number} · Q${state.round_progress.index} of ${state.round_progress.total}`
+        : `Round phase: ${state.round_phase}`,
+      state.current ? `${state.current.state}` : 'no current question',
+      `Marking: ${state.marking.marked}/${state.marking.total}`,
+      `Tables live: ${state.tables_live.live}/${state.tables_live.total}`,
+      `v${state.version}`
+    ];
+    hostEls.vitals.textContent = parts.join(' — ');
 
     hostEls.answered.textContent = state.current
-      ? `Answered: ${state.answered.count}/${state.answered.total}`
+      ? `Answered: ${state.answered.count}/${state.answered.total}` +
+        (state.answered.outstanding.length ? ` — outstanding: ${state.answered.outstanding.join(', ')}` : '')
       : '';
 
     clear(hostEls.list);
@@ -526,12 +535,89 @@
     heading.textContent = 'Admin';
     app.appendChild(heading);
 
+    buildEventsSection();
     buildQuestionsSection();
     buildTablesSection();
     buildMediaSection();
+    buildThemeSection();
     buildConfigSection();
     buildAuditSection();
     buildBackupSection();
+  }
+
+  // --- events: many configured, exactly one active (technical-design §16.5) --
+
+  function buildEventsSection() {
+    section('Events');
+
+    const nameInput = document.createElement('input');
+    nameInput.placeholder = 'New event name';
+    const createBtn = document.createElement('button');
+    createBtn.type = 'button';
+    createBtn.textContent = 'New event (draft)';
+    const msg = document.createElement('p');
+    msg.className = 'error';
+    msg.setAttribute('role', 'alert');
+
+    const list = document.createElement('div');
+    list.className = 'question-list';
+
+    async function refreshEvents() {
+      const res = await fetch('/admin/events', { cache: 'no-store' });
+      const data = await res.json();
+      clear(list);
+      data.events.forEach((e) => {
+        const row = document.createElement('div');
+        row.className = 'question-row';
+        const label = document.createElement('span');
+        const current = e.id === data.current_event_id ? ' — this session' : '';
+        label.textContent = `${e.name} — ${e.status} — ${e.question_count} questions, ${e.table_count} tables${current}`;
+        row.appendChild(label);
+
+        if (e.status !== 'active' && e.id === data.current_event_id) {
+          const activateBtn = document.createElement('button');
+          activateBtn.type = 'button';
+          activateBtn.textContent = 'Activate';
+          activateBtn.addEventListener('click', async () => {
+            const res2 = await fetch(`/admin/events/${e.id}/activate`, { method: 'POST' });
+            const d2 = await res2.json();
+            msg.textContent = res2.ok ? 'Activated.' : `Could not activate: ${d2.error} ${d2.active_event_name || ''}`;
+            refreshEvents();
+          });
+          row.appendChild(activateBtn);
+        }
+        if (e.status === 'active' && e.id === data.current_event_id) {
+          const finishBtn = document.createElement('button');
+          finishBtn.type = 'button';
+          finishBtn.textContent = 'Finish event';
+          finishBtn.addEventListener('click', async () => {
+            await fetch(`/admin/events/${e.id}/finish`, { method: 'POST' });
+            refreshEvents();
+          });
+          row.appendChild(finishBtn);
+        }
+        list.appendChild(row);
+      });
+    }
+
+    createBtn.addEventListener('click', async () => {
+      const res = await fetch('/admin/events', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nameInput.value })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        msg.textContent = `Created. PINs — host ${data.pins.host}, marker ${data.pins.marker}, ` +
+          `floor ${data.pins.floor}, admin ${data.pins.admin}. Write these down now.`;
+        nameInput.value = '';
+        refreshEvents();
+      } else {
+        msg.textContent = `Could not create: ${data.error}`;
+      }
+    });
+
+    app.append(nameInput, createBtn, msg, list);
+    refreshEvents();
   }
 
   function section(title) {
@@ -632,11 +718,112 @@
         const where = qu.is_practice ? 'Practice' : qu.is_reserve ? 'Reserve' : `R${qu.round} Q${qu.order_no}`;
         label.textContent = `${where}: ${qu.prompt} — answer: ${qu.correct_answer} (${qu.points}pt, ${qu.type})`;
         row.appendChild(label);
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', () => openQuestionEditor(qu.id));
+        row.appendChild(editBtn);
+
         list.appendChild(row);
       });
     }
 
-    app.append(fileInput, previewBtn, importBtn, msg, previewList, listHeading, list);
+    const editorWrap = document.createElement('div');
+    editorWrap.className = 'question-list';
+
+    async function openQuestionEditor(id) {
+      const res = await fetch(`/admin/questions/${id}`, { cache: 'no-store' });
+      const data = await res.json();
+      clear(editorWrap);
+
+      if (data.edit_state === 'blocked') {
+        const p = document.createElement('p');
+        p.className = 'error';
+        p.textContent = 'This question is currently OPEN — close it before editing.';
+        editorWrap.appendChild(p);
+        return;
+      }
+
+      const qu = data.question;
+      const warn = document.createElement('p');
+      warn.className = 'note';
+      warn.textContent = data.edit_state === 'revealed'
+        ? 'This question has been revealed. Changing the answer or aliases will re-score every table that answered — preview the impact first.'
+        : data.edit_state === 'closed'
+          ? 'This question has answers recorded. Changing the answer or aliases will re-score them.'
+          : 'Not yet reached — edits freely, no impact.';
+      editorWrap.appendChild(warn);
+
+      const promptInput = document.createElement('input');
+      promptInput.value = qu.prompt;
+      const correctInput = document.createElement('input');
+      correctInput.value = qu.correct_answer || '';
+      const aliasesInput = document.createElement('input');
+      aliasesInput.placeholder = 'Aliases, pipe-separated';
+      aliasesInput.value = (qu.aliases || []).join('|');
+      const pointsInput = document.createElement('input');
+      pointsInput.type = 'number';
+      pointsInput.value = qu.points;
+
+      const previewBtn = document.createElement('button');
+      previewBtn.type = 'button';
+      previewBtn.textContent = 'Preview impact';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.textContent = 'Save';
+      const msg = document.createElement('p');
+      msg.className = 'error';
+      msg.setAttribute('role', 'alert');
+
+      let confirmed = false;
+
+      function buildBody() {
+        return {
+          prompt: promptInput.value,
+          correct_answer: correctInput.value,
+          aliases: aliasesInput.value.split('|').map((s) => s.trim()).filter(Boolean),
+          points: Number(pointsInput.value)
+        };
+      }
+
+      previewBtn.addEventListener('click', async () => {
+        const res2 = await fetch(`/admin/questions/${id}/preview-impact`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody())
+        });
+        const impact = await res2.json();
+        msg.className = 'note';
+        msg.textContent = `${impact.flipped_to_correct} tables wrong→correct, ${impact.flipped_to_wrong} correct→wrong, ` +
+          `${impact.unaffected} unaffected, ${impact.points_delta >= 0 ? '+' : ''}${impact.points_delta} points.` +
+          (impact.needs_republish ? ' A published round will need re-publishing.' : '');
+        confirmed = true;
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        const res2 = await fetch(`/admin/questions/${id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...buildBody(), confirm: confirmed })
+        });
+        const data2 = await res2.json();
+        if (res2.status === 428) {
+          msg.className = 'error';
+          msg.textContent = 'Preview the impact first, then save.';
+        } else if (res2.ok) {
+          msg.className = 'note';
+          msg.textContent = 'Saved.';
+          refreshQuestionsList();
+        } else {
+          msg.className = 'error';
+          msg.textContent = `Could not save: ${data2.message || data2.error}`;
+        }
+      });
+
+      editorWrap.append(
+        promptInput, correctInput, aliasesInput, pointsInput, previewBtn, saveBtn, msg
+      );
+    }
+
+    app.append(fileInput, previewBtn, importBtn, msg, previewList, listHeading, list, editorWrap);
     refreshQuestionsList();
   }
 
@@ -693,7 +880,12 @@
       if (res.ok) refreshTables();
     });
 
-    app.append(fileInput, importBtn, msg, list);
+    const qrBtn = document.createElement('button');
+    qrBtn.type = 'button';
+    qrBtn.textContent = 'Print QR sheet';
+    qrBtn.addEventListener('click', () => window.open('/admin/tables/qr-sheet', '_blank'));
+
+    app.append(fileInput, importBtn, msg, qrBtn, list);
     refreshTables();
   }
 
@@ -772,7 +964,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${(data.name || 'event').replace(/[^a-z0-9-]+/gi, '-')}.json`;
+      a.download = `${(data.event?.name || 'event').replace(/[^a-z0-9-]+/gi, '-')}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -794,7 +986,9 @@
       });
       const data = await res.json();
       msg.textContent = res.ok
-        ? `Created event ${data.event_id} as ${data.status}. Activate it from event lifecycle admin (not yet built) or the database directly.`
+        ? `Created event ${data.event_id} as ${data.status}. PINs — host ${data.pins.host}, ` +
+          `marker ${data.pins.marker}, floor ${data.pins.floor}, admin ${data.pins.admin}. ` +
+          `Activate it from the Events section above.`
         : `Could not import: ${data.error}`;
     });
 
@@ -831,6 +1025,138 @@
     refreshAudit();
   }
 
+  // --- theme: event/round/question cascade (CLAUDE.md #18-22) ------------
+
+  const LAYOUTS = ['standard', 'image', 'media', 'statement', 'text-answer'];
+
+  function buildThemeSection() {
+    section('Theme');
+
+    const levelSelect = document.createElement('select');
+    ['event', 'round', 'question'].forEach((lv) => {
+      const opt = document.createElement('option');
+      opt.value = lv; opt.textContent = lv[0].toUpperCase() + lv.slice(1);
+      levelSelect.appendChild(opt);
+    });
+
+    const targetInput = document.createElement('input');
+    targetInput.placeholder = 'Round number or question id';
+    targetInput.style.display = 'none';
+    levelSelect.addEventListener('change', () => {
+      targetInput.style.display = levelSelect.value === 'event' ? 'none' : '';
+    });
+
+    const bgOverride = document.createElement('input'); bgOverride.type = 'checkbox';
+    const bgInput = document.createElement('input'); bgInput.type = 'color'; bgInput.value = '#1a1d24';
+    const bg2Override = document.createElement('input'); bg2Override.type = 'checkbox';
+    const bg2Input = document.createElement('input'); bg2Input.type = 'color'; bg2Input.value = '#2a2f3a';
+    const accentOverride = document.createElement('input'); accentOverride.type = 'checkbox';
+    const accentInput = document.createElement('input'); accentInput.type = 'color'; accentInput.value = '#e0a82e';
+    const layoutOverride = document.createElement('input'); layoutOverride.type = 'checkbox';
+    const layoutSelect = document.createElement('select');
+    LAYOUTS.forEach((l) => {
+      const opt = document.createElement('option');
+      opt.value = l; opt.textContent = l;
+      layoutSelect.appendChild(opt);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Save theme for this level';
+    const msg = document.createElement('p');
+    msg.className = 'error';
+    msg.setAttribute('role', 'alert');
+
+    saveBtn.addEventListener('click', async () => {
+      const theme = {};
+      if (layoutOverride.checked) theme.layout = layoutSelect.value;
+      if (bgOverride.checked) theme.bg = bgInput.value;
+      if (bg2Override.checked) theme.bg2 = bg2Input.value;
+      if (accentOverride.checked) theme.accent = accentInput.value;
+
+      let url;
+      if (levelSelect.value === 'event') url = '/admin/theme/event';
+      else if (levelSelect.value === 'round') url = `/admin/theme/round/${Number(targetInput.value)}`;
+      else url = `/admin/theme/question/${Number(targetInput.value)}`;
+
+      const res = await fetch(url, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme })
+      });
+      const data = await res.json();
+      msg.textContent = res.ok ? 'Saved.' : `Could not save: ${data.error}`;
+      refreshResolved();
+    });
+
+    app.append(
+      levelSelect, targetInput,
+      document.createElement('br'),
+      layoutOverride, document.createTextNode(' Layout '), layoutSelect,
+      document.createElement('br'),
+      bgOverride, document.createTextNode(' Background '), bgInput,
+      bg2Override, document.createTextNode(' Gradient end '), bg2Input,
+      accentOverride, document.createTextNode(' Accent '), accentInput,
+      document.createElement('br'),
+      saveBtn, msg
+    );
+
+    // Chrome — event level only, deliberately outside the cascade (CLAUDE.md #20).
+    const chromeHeading = document.createElement('p');
+    chromeHeading.textContent = 'Chrome (event only, does not cascade)';
+    const titleInput = document.createElement('input'); titleInput.placeholder = 'Title';
+    const subtitleInput = document.createElement('input'); subtitleInput.placeholder = 'Subtitle';
+    const logoLightInput = document.createElement('input'); logoLightInput.placeholder = 'Logo filename (light bg)';
+    const logoDarkInput = document.createElement('input'); logoDarkInput.placeholder = 'Logo filename (dark bg)';
+    const footerInput = document.createElement('input'); footerInput.placeholder = 'Footer band text';
+    const chromeSaveBtn = document.createElement('button');
+    chromeSaveBtn.type = 'button';
+    chromeSaveBtn.textContent = 'Save chrome';
+    chromeSaveBtn.addEventListener('click', async () => {
+      await fetch('/admin/theme/chrome', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chrome: {
+            title: titleInput.value, subtitle: subtitleInput.value,
+            logo_light: logoLightInput.value, logo_dark: logoDarkInput.value, footer: footerInput.value
+          }
+        })
+      });
+    });
+    app.append(
+      chromeHeading, titleInput, subtitleInput, logoLightInput, logoDarkInput, footerInput, chromeSaveBtn
+    );
+
+    // Resolved + validated (CLAUDE.md #21) — the client never sees the
+    // cascade, only this already-resolved result.
+    const resolvedHeading = document.createElement('p');
+    resolvedHeading.textContent = 'Resolved themes';
+    const resolvedList = document.createElement('div');
+    resolvedList.className = 'question-list';
+    app.append(resolvedHeading, resolvedList);
+
+    async function refreshResolved() {
+      const res = await fetch('/admin/theme', { cache: 'no-store' });
+      const data = await res.json();
+      clear(resolvedList);
+
+      const summary = document.createElement('div');
+      summary.className = 'question-row';
+      const failingQuestions = data.questions.filter((r) => !r.validation.pass);
+      summary.textContent = `Event default: ${data.event_default.validation.pass ? 'pass' : 'FAIL'} — ` +
+        `${data.questions.length - failingQuestions.length}/${data.questions.length} questions pass`;
+      resolvedList.appendChild(summary);
+
+      failingQuestions.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'question-row';
+        const failed = r.validation.checks.filter((c) => !c.pass).map((c) => `${c.label} (${c.ratio}:1, needs ${c.required}:1)`);
+        row.textContent = `Q${r.order_no ?? r.question_id}: ${failed.join('; ')}`;
+        resolvedList.appendChild(row);
+      });
+    }
+
+    refreshResolved();
+  }
+
   // --- backup: the whole database is one file (technical-design §8.2) ----
 
   function buildBackupSection() {
@@ -844,6 +1170,186 @@
     });
 
     app.appendChild(btn);
+  }
+
+  // --- floor console -------------------------------------------------
+  // Walks the room with a phone. Never sees correct answers
+  // (technical-design §13.2) — the room grid and table detail below never
+  // request or render one.
+
+  let floorEls = null;
+  let floorPollHandle = null;
+  const OFFLINE_MS = 60000;
+  const QUIET_MS = 20000;
+
+  function startFloor() {
+    clear(app);
+    floorEls = {};
+
+    const heading = document.createElement('h1');
+    heading.textContent = 'Floor';
+    app.appendChild(heading);
+
+    const summary = document.createElement('p');
+    app.appendChild(summary);
+    floorEls.summary = summary;
+
+    const grid = document.createElement('div');
+    grid.className = 'question-list';
+    app.appendChild(grid);
+    floorEls.grid = grid;
+
+    const attentionHeading = document.createElement('p');
+    attentionHeading.textContent = 'Needs attention';
+    const attention = document.createElement('div');
+    attention.className = 'question-list';
+    app.append(attentionHeading, attention);
+    floorEls.attention = attention;
+
+    refreshFloor();
+    floorPollHandle = window.Poll.start({
+      vUrl: '/floor/v', stateUrl: '/floor/teams', intervalMs: 3000, onState: renderFloor
+    });
+  }
+
+  async function refreshFloor() {
+    const res = await fetch('/floor/teams', { cache: 'no-store' });
+    renderFloor(await res.json());
+  }
+
+  function presenceStatus(team, questionOpen) {
+    if (!team.last_seen_at) return 'offline';
+    const age = Date.now() - new Date(team.last_seen_at).getTime();
+    if (age > OFFLINE_MS) return 'offline';
+    if (questionOpen && age > QUIET_MS && !team.answered_current) return 'quiet';
+    return 'ok';
+  }
+
+  function renderFloor(state) {
+    const teams = state.teams;
+    const statuses = teams.map((t) => ({ t, status: presenceStatus(t, state.question_open) }));
+    const answeredCount = teams.filter((t) => t.answered_current).length;
+
+    floorEls.summary.textContent = state.question_open
+      ? `${answeredCount} of ${teams.length} answering`
+      : 'No question open';
+
+    clear(floorEls.grid);
+    statuses.forEach(({ t, status }) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = `${t.table_number}${status !== 'ok' ? ` (${status})` : ''}`;
+      btn.addEventListener('click', () => openFloorTable(t.team_id));
+      floorEls.grid.appendChild(btn);
+    });
+
+    clear(floorEls.attention);
+    const needsAttention = statuses.filter((s) => s.status !== 'ok');
+    if (!needsAttention.length) {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = 'Nothing needs a visit right now.';
+      floorEls.attention.appendChild(p);
+    }
+    needsAttention.forEach(({ t, status }) => {
+      const row = document.createElement('div');
+      row.className = 'question-row';
+      const label = document.createElement('span');
+      label.textContent = `Table ${t.table_number} — ${status === 'offline' ? 'offline' : 'quiet, not answered yet'}`;
+      row.appendChild(label);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Open';
+      btn.addEventListener('click', () => openFloorTable(t.team_id));
+      row.appendChild(btn);
+      floorEls.attention.appendChild(row);
+    });
+  }
+
+  async function openFloorTable(teamId) {
+    if (floorPollHandle) floorPollHandle.stop();
+    clear(app);
+
+    const res = await fetch(`/floor/team/${teamId}`, { cache: 'no-store' });
+    if (!res.ok) { startFloor(); return; }
+    const data = await res.json();
+
+    const heading = document.createElement('h1');
+    heading.textContent = `Table ${data.team.table_number}${data.team.team_name ? ' — ' + data.team.team_name : ''}`;
+    app.appendChild(heading);
+
+    const info = document.createElement('p');
+    info.className = 'note';
+    info.textContent = `Players: ${data.players.map((p) => p.username).join(', ') || 'none yet'}`;
+    app.appendChild(info);
+
+    const renameInput = document.createElement('input');
+    renameInput.placeholder = 'New team name';
+    renameInput.value = data.team.team_name || '';
+    const renameBtn = document.createElement('button');
+    renameBtn.type = 'button';
+    renameBtn.textContent = 'Rename team';
+    renameBtn.addEventListener('click', async () => {
+      await fetch('/floor/rename', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: teamId, team_name: renameInput.value })
+      });
+      openFloorTable(teamId);
+    });
+
+    const captainSelect = document.createElement('select');
+    data.players.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.username + (p.id === data.team.captain_player_id ? ' (captain)' : '');
+      captainSelect.appendChild(opt);
+    });
+    const captainBtn = document.createElement('button');
+    captainBtn.type = 'button';
+    captainBtn.textContent = 'Make captain';
+    captainBtn.addEventListener('click', async () => {
+      await fetch('/floor/reassign-captain', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: teamId, player_id: Number(captainSelect.value) })
+      });
+      openFloorTable(teamId);
+    });
+
+    app.append(renameInput, renameBtn, document.createElement('br'), captainSelect, captainBtn);
+
+    if (data.current_question) {
+      const qHeading = document.createElement('p');
+      qHeading.textContent = `Q: ${data.current_question.prompt}`;
+      app.appendChild(qHeading);
+
+      const valueInput = document.createElement('input');
+      valueInput.placeholder = 'What the table told you';
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'button';
+      submitBtn.textContent = 'Submit for this table';
+      const msg = document.createElement('p');
+      msg.className = 'error';
+      msg.setAttribute('role', 'alert');
+
+      submitBtn.addEventListener('click', async () => {
+        const res2 = await fetch('/floor/answer-on-behalf', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            team_id: teamId, question_id: data.current_question.id, value: valueInput.value
+          })
+        });
+        const d2 = await res2.json();
+        msg.textContent = res2.ok ? 'Recorded.' : `Could not record: ${d2.error}`;
+      });
+
+      app.append(valueInput, submitBtn, msg);
+    }
+
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.textContent = 'Back to room';
+    back.addEventListener('click', startFloor);
+    app.appendChild(back);
   }
 
   renderRolePicker();

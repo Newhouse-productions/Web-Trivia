@@ -9,6 +9,21 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  // Same resolved theme as the phones, painting both surfaces together for
+  // the same question (CLAUDE.md #19).
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement.style;
+    const c = theme.colour;
+    root.setProperty('--bg', c.bg);
+    root.setProperty('--surface', c.surface);
+    root.setProperty('--text', c.text);
+    root.setProperty('--text-muted', c['text-muted']);
+    root.setProperty('--border', c.border);
+    root.setProperty('--accent', c.accent);
+    root.setProperty('--accent-text', c['accent-text']);
+  }
+
   async function refresh() {
     const res = await fetch('/screen/state', { cache: 'no-store' });
     render(await res.json());
@@ -61,9 +76,22 @@
     }
 
     if (state.stage === 'question') {
+      applyTheme(state.theme);
+      const layout = state.theme ? state.theme.layout : 'standard';
       const q = state.question;
+
+      // Media layout holds the room on a neutral screen while the clip
+      // plays — no prompt shown until the host opens the question.
+      if (layout === 'media' && q.state !== 'OPEN' && q.state !== 'REVEALED') {
+        const holding = document.createElement('p');
+        holding.className = 'screen-prompt';
+        holding.textContent = 'Listen carefully…';
+        app.appendChild(holding);
+        return;
+      }
+
       const prompt = document.createElement('p');
-      prompt.className = 'screen-prompt';
+      prompt.className = 'screen-prompt' + (layout === 'statement' ? ' statement' : '');
       prompt.textContent = q.prompt;
       app.appendChild(prompt);
 

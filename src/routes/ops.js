@@ -36,12 +36,37 @@ export function registerOpsRoutes(app, { db, q }) {
   const logAudit = makeAuditLogger(db);
   const getActiveEvent = db.prepare("SELECT * FROM events WHERE status = 'active'");
   const deleteMarkingClaim = db.prepare('DELETE FROM marking_claims WHERE question_id = ?');
+  const markRevealed = db.prepare('UPDATE questions SET revealed_at = ? WHERE id = ? AND revealed_at IS NULL');
 
   const getAnsweredGrid = db.prepare(`
     SELECT t.id AS team_id, t.table_number,
            EXISTS(SELECT 1 FROM answers a WHERE a.team_id = t.id AND a.question_id = ?) AS answered
     FROM teams t WHERE t.event_id = ? AND t.archived = 0
     ORDER BY t.table_number
+  `);
+
+  // "Live" is a presence heuristic for the vitals strip and pre-flight, not
+  // an invariant — a table not seen in 30s (10x the 3s poll interval) reads
+  // as dropped off.
+  const PRESENCE_WINDOW_MS = 30000;
+  const getLiveCount = db.prepare(`
+    SELECT COUNT(*) AS n FROM teams
+    WHERE event_id = ? AND archived = 0 AND last_seen_at IS NOT NULL
+      AND (unixepoch('now') - unixepoch(last_seen_at)) * 1000 < ?
+  `);
+  const getTeamCount = db.prepare('SELECT COUNT(*) AS n FROM teams WHERE event_id = ? AND archived = 0');
+
+  // Marking progress across the event: text questions that have at least
+  // one answer are "in the queue"; fully marked means no NULLs remain.
+  const getMarkingProgress = db.prepare(`
+    SELECT COUNT(*) AS total,
+           SUM(CASE WHEN unmarked = 0 THEN 1 ELSE 0 END) AS marked
+    FROM (
+      SELECT q.id, SUM(CASE WHEN a.is_correct IS NULL THEN 1 ELSE 0 END) AS unmarked
+      FROM questions q JOIN answers a ON a.question_id = q.id
+      WHERE q.event_id = ? AND q.type = 'text'
+      GROUP BY q.id
+    )
   `);
 
   // Scores are derived from answers + bonuses on read, never stored
@@ -103,20 +128,31 @@ export function registerOpsRoutes(app, { db, q }) {
       return reply.code(429).send({ ok: false, retry_after_ms: sessionLimit.retryAfterMs });
     }
 
-    const event = getActiveEvent.get();
-    if (!event) return reply.code(503).send({ error: 'no_active_event' });
+    const pin = String(req.body?.pin || '');
 
-    const roleLock = checkRoleLockout(event.id, role);
-    if (!roleLock.allowed) {
-      return reply.code(423).send({ error: 'role_locked' });
+    // Host/Marker/Floor land directly in the active event — sequential
+    // events cost nothing and a PIN that could select among several running
+    // events is exactly the graceless-recovery scenario CLAUDE.md #6 rejects.
+    // Admin alone picks from a list (technical-design §16.2), so its PIN is
+    // checked across every configured event, not just the active one.
+    let event;
+    if (role === 'admin') {
+      event = db.prepare('SELECT * FROM events WHERE admin_pin = ?').get(pin);
+      if (event) {
+        const roleLock = checkRoleLockout(event.id, role);
+        if (!roleLock.allowed) return reply.code(423).send({ error: 'role_locked' });
+      }
+    } else {
+      event = getActiveEvent.get();
+      if (!event) return reply.code(503).send({ error: 'no_active_event' });
+      const roleLock = checkRoleLockout(event.id, role);
+      if (!roleLock.allowed) return reply.code(423).send({ error: 'role_locked' });
     }
 
-    const pin = String(req.body?.pin || '');
-    const expected = event[`${role}_pin`];
-
-    if (!expected || pin !== expected) {
+    const expected = event ? event[`${role}_pin`] : null;
+    if (!event || !expected || pin !== expected) {
       recordSessionFailure(sid);
-      recordRoleFailure(event.id, role);
+      if (event) recordRoleFailure(event.id, role);
       return reply.code(401).send({ ok: false, message: 'Incorrect PIN.' });
     }
 
@@ -153,16 +189,27 @@ export function registerOpsRoutes(app, { db, q }) {
     const questions = q.getQuestionsForEvent.all(event.id);
     const current = es.current_question_id ? q.getQuestionById.get(es.current_question_id) : null;
     const grid = current ? getAnsweredGrid.all(current.id, event.id) : [];
+    const marking = getMarkingProgress.get(event.id);
+    const roundQuestions = current
+      ? questions.filter((qu) => qu.round === current.round && !qu.is_practice && !qu.is_reserve)
+      : [];
+    const questionIndexInRound = current ? roundQuestions.findIndex((qu) => qu.id === current.id) : -1;
 
     return {
       version: event.version,
       round_phase: es.round_phase,
+      round_progress: current && questionIndexInRound !== -1
+        ? { number: current.round, index: questionIndexInRound + 1, total: roundQuestions.length }
+        : null,
       current: current ? q.hostQuestionPayload(current, es.question_status) : null,
       answered: {
         count: grid.filter((r) => r.answered).length,
         total: grid.length,
+        outstanding: grid.filter((r) => !r.answered).map((r) => r.table_number),
         tables: grid.map((r) => ({ team_id: r.team_id, table_number: r.table_number, answered: !!r.answered }))
       },
+      marking: { marked: marking.marked || 0, total: marking.total || 0 },
+      tables_live: { live: getLiveCount.get(event.id, PRESENCE_WINDOW_MS).n, total: getTeamCount.get(event.id).n },
       questions: questions.map((qu) => ({
         id: qu.id, round: qu.round, order_no: qu.order_no, type: qu.type,
         prompt: qu.prompt, points: qu.points, is_practice: !!qu.is_practice
@@ -222,6 +269,7 @@ export function registerOpsRoutes(app, { db, q }) {
       // acting legitimately in opposite directions; the host wins
       // (technical-design §6.2).
       if (isReopen) deleteMarkingClaim.run(questionId);
+      if (targetState === 'REVEALED') markRevealed.run(new Date().toISOString(), questionId);
       logAudit({
         eventId: event.id, role: 'host', operator: ops.name, action: 'setQuestion',
         target: `question:${questionId}`, reason: `${targetState}${isReopen ? ' (reopen)' : ''}`

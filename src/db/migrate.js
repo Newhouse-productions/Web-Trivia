@@ -14,6 +14,19 @@ export function migrate(db) {
   addColumn('events', 'marker_pin', 'TEXT');
   addColumn('events', 'floor_pin', 'TEXT');
   addColumn('events', 'admin_pin', 'TEXT');
+  addColumn('events', 'subtitle', 'TEXT');
+  addColumn('events', 'time', 'TEXT');
+  addColumn('events', 'venue', 'TEXT');
+  addColumn('events', 'entry_fee', 'TEXT');
+  addColumn('events', 'beneficiary', 'TEXT');
+  addColumn('events', 'chrome', 'TEXT');
+  addColumn('teams', 'last_seen_at', 'TEXT');
+  // Tracks whether a question has ever been revealed, independent of
+  // whether the host has since moved on — needed to gate re-scoring
+  // (CLAUDE.md #14): editing after reveal needs an impact preview, editing
+  // before it doesn't, and "is this question still current" alone can't
+  // tell the two apart once the host advances.
+  addColumn('questions', 'revealed_at', 'TEXT');
 
   // round/order_no started NOT NULL; practice/reserve questions need them
   // nullable. SQLite can't drop a NOT NULL constraint in place, so rebuild.

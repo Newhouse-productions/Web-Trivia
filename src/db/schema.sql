@@ -5,7 +5,12 @@
 CREATE TABLE IF NOT EXISTS events (
   id              INTEGER PRIMARY KEY,
   name            TEXT NOT NULL,
+  subtitle        TEXT,
   date            TEXT,
+  time            TEXT,
+  venue           TEXT,
+  entry_fee       TEXT,
+  beneficiary     TEXT,
   status          TEXT NOT NULL DEFAULT 'draft'
                     CHECK (status IN ('draft', 'active', 'finished', 'archived')),
   passphrase      TEXT NOT NULL,
@@ -13,6 +18,7 @@ CREATE TABLE IF NOT EXISTS events (
   version         INTEGER NOT NULL DEFAULT 0,
   paused          TEXT,
   theme           TEXT,
+  chrome          TEXT,
   retention_until TEXT,
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -33,6 +39,7 @@ CREATE TABLE IF NOT EXISTS teams (
   joined_at_round    INTEGER,
   table_version      INTEGER NOT NULL DEFAULT 0,
   archived           INTEGER NOT NULL DEFAULT 0,
+  last_seen_at       TEXT,
   UNIQUE (event_id, table_number)
 );
 
@@ -67,6 +74,7 @@ CREATE TABLE IF NOT EXISTS questions (
   is_reserve     INTEGER NOT NULL DEFAULT 0,
   is_skipped     INTEGER NOT NULL DEFAULT 0,
   theme          TEXT,
+  revealed_at    TEXT,
   UNIQUE (event_id, order_no)
 );
 
