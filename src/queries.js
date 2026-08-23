@@ -45,7 +45,7 @@ export function buildQueries(db) {
   const getCurrentQuestion = db.prepare(`
     SELECT es.question_status, q.id AS question_id, q.event_id, q.round, q.type, q.prompt,
            q.options, q.correct_answer, q.aliases, q.points, q.image_ref, q.image_alt,
-           q.video_url, q.av_cue, q.is_practice, q.theme
+           q.video_url, q.av_cue, q.is_practice, q.theme, q.opened_at
     FROM event_state es
     JOIN questions q ON q.id = es.current_question_id
     WHERE es.event_id = ?
@@ -54,6 +54,25 @@ export function buildQueries(db) {
     'SELECT sha256 FROM media_manifest WHERE event_id = ? AND filename = ?'
   );
   const getRoundByNumber = db.prepare('SELECT theme FROM rounds WHERE event_id = ? AND number = ?');
+  const getSettingRows = db.prepare('SELECT key, value FROM settings WHERE event_id = ?');
+  // The settings table is otherwise write/export-only (round-tripped through
+  // config JSON, never read at runtime) — this is the first real consumer,
+  // used to gate the optional per-question timer.
+  function getSettings(eventId) {
+    return Object.fromEntries(getSettingRows.all(eventId).map((r) => [r.key, r.value]));
+  }
+
+  // Soft, server-timestamped cue — never auto-submits (scope §2 "Running
+  // the night"). A single fixed duration this pass; admin can only toggle
+  // it on/off, not change the length (deferred). Only shown while the
+  // question is actually OPEN — once closed/revealed a stale countdown adds
+  // nothing.
+  const TIMER_SECONDS = 60;
+  function resolveTimer(event, openedAt, questionStatus) {
+    if (!openedAt || questionStatus !== 'OPEN') return null;
+    if (getSettings(event.id).timer_enabled !== 'true') return null;
+    return { opened_at: openedAt, duration_seconds: TIMER_SECONDS };
+  }
 
   // Resolved server-side; the client never sees the cascade (CLAUDE.md #21).
   function resolveCurrentTheme(event, current) {
@@ -218,7 +237,7 @@ export function buildQueries(db) {
     getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
     getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme, resolveChrome,
-    allResolvedThemes,
+    allResolvedThemes, getSettings, resolveTimer,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }

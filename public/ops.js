@@ -386,6 +386,14 @@
       vitalCell('Tables', `${state.tables_live.live}/${state.tables_live.total}`, state.tables_live.live < state.tables_live.total),
       vitalCell('Version', `v${state.version}`)
     );
+    // Recomputed fresh every 1s poll — frequent enough for a soft cue that
+    // no one is meant to stare at, so no separate ticking interval here.
+    if (state.timer) {
+      const openedAtMs = new Date(state.timer.opened_at).getTime();
+      const remaining = Math.max(0, state.timer.duration_seconds - (Date.now() - openedAtMs) / 1000);
+      const label = `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, '0')}`;
+      hostEls.vitals.appendChild(vitalCell('Timer', label, remaining <= 10));
+    }
 
     // Keyboard shortcuts only ever act on the active list — reset every
     // render so a stale action from a previous phase can never fire.
@@ -1174,12 +1182,48 @@
     buildTablesSection();
     buildMediaSection();
     buildThemeSection();
+    buildSettingsSection();
     buildConfigSection();
     buildAuditSection();
     buildBackupSection();
   }
 
   let adminBody = null;
+
+  // --- settings: on/off only this pass (duration is a fixed constant,
+  // src/queries.js's TIMER_SECONDS) — enough that the timer is reachable
+  // at all, without building a full settings editor yet.
+
+  function buildSettingsSection() {
+    section('Settings');
+
+    const label = document.createElement('label');
+    label.className = 'label';
+    label.style.display = 'flex';
+    label.style.alignItems = 'center';
+    label.style.gap = 'var(--s2)';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    label.append(checkbox, document.createTextNode(' Timer (60s countdown shown once a question opens)'));
+    adminBody.appendChild(label);
+
+    const msg = document.createElement('p');
+    msg.className = 'error';
+    msg.setAttribute('role', 'alert');
+    adminBody.appendChild(msg);
+
+    checkbox.addEventListener('change', async () => {
+      const res = await fetch('/admin/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timer_enabled: checkbox.checked })
+      });
+      msg.textContent = res.ok ? 'Saved.' : 'Could not save.';
+    });
+
+    fetch('/admin/settings', { cache: 'no-store' }).then((r) => r.json()).then((data) => {
+      checkbox.checked = data.settings?.timer_enabled === 'true';
+    });
+  }
 
   // --- events: many configured, exactly one active (technical-design §16.5) --
 

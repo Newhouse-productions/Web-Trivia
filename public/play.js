@@ -404,6 +404,15 @@
     playEls.roundEyebrow = roundEyebrow;
     playEls.pointsEyebrow = pointsEyebrow;
 
+    // Soft cue only — never blocks or auto-submits an answer.
+    const timer = document.createElement('p');
+    timer.className = 'display num';
+    timer.style.fontSize = 'var(--t-lead)';
+    timer.style.margin = 'var(--s2) 0 0';
+    timer.style.display = 'none';
+    pbody.appendChild(timer);
+    playEls.timer = timer;
+
     const image = document.createElement('img');
     image.className = 'question-image';
     image.style.display = 'none';
@@ -516,10 +525,29 @@
     document.documentElement.dataset.theme = theme.dark ? 'dark' : 'light';
   }
 
+  // Soft, server-timestamped cue (CLAUDE.md/scope §2) — recomputed fresh
+  // from the server timestamp on every poll so drift never accumulates,
+  // ticked locally in between polls purely for display.
+  let timerInterval = null;
+  function renderTimer(el, timer) {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (!timer) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = '';
+    const openedAtMs = new Date(timer.opened_at).getTime();
+    const tick = () => {
+      const remaining = Math.max(0, timer.duration_seconds - (Date.now() - openedAtMs) / 1000);
+      el.textContent = `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, '0')}`;
+      if (remaining <= 0 && timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    };
+    tick();
+    timerInterval = setInterval(tick, 1000);
+  }
+
   function updatePlay(state) {
     if (!playEls) { enterPlay(state); return; }
     latestPlayState = state;
     applyTheme(state.theme);
+    renderTimer(playEls.timer, state.timer);
 
     const team = state.team;
     playEls.teamName.textContent = team.team_name || '';

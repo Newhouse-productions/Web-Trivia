@@ -131,6 +131,7 @@ export function registerPlayerRoutes(app, { db, q }) {
       table_version: team.table_version,
       round: current ? current.round : null,
       theme: q.resolveCurrentTheme(event, current),
+      timer: q.resolveTimer(event, current?.opened_at, current?.question_status),
       question: current ? q.playerQuestionPayload(current) : null,
       our_answer: current ? q.playerAnswerPayload(ourAnswer, current.question_status) : null,
       team: {

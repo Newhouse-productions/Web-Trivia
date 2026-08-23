@@ -222,6 +222,7 @@ export function registerOpsRoutes(app, { db, q }) {
       round_phase: es.round_phase,
       paused: event.paused ? JSON.parse(event.paused) : null,
       theme: q.resolveCurrentTheme(event, current),
+      timer: q.resolveTimer(event, current?.opened_at, es.question_status),
       round_progress: current && questionIndexInRound !== -1
         ? { number: current.round, index: questionIndexInRound + 1, total: roundQuestions.length }
         : null,

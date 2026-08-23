@@ -167,6 +167,33 @@ export function registerAdminRoutes(app, { db, q }) {
     return { ok: true, total_rounds: totalRounds };
   });
 
+  // Minimal on/off toggle only — the settings table has no editor beyond
+  // this yet (duration is a fixed constant this pass, src/queries.js's
+  // TIMER_SECONDS). Without even this checkbox, timer_enabled would only
+  // ever be reachable by hand-editing the database or a JSON config import.
+  const upsertSetting = db.prepare(`
+    INSERT INTO settings (event_id, key, value) VALUES (?, ?, ?)
+    ON CONFLICT(event_id, key) DO UPDATE SET value = excluded.value
+  `);
+
+  app.get('/admin/settings', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    return { settings: q.getSettings(event.id) };
+  });
+
+  app.put('/admin/settings', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    const timerEnabled = !!req.body?.timer_enabled;
+    upsertSetting.run(event.id, 'timer_enabled', String(timerEnabled));
+    logAudit({
+      eventId: event.id, role: 'admin', operator: readOpsSession(req).name,
+      action: 'setSettings', target: 'event', reason: `timer_enabled=${timerEnabled}`
+    });
+    return { ok: true, timer_enabled: timerEnabled };
+  });
+
   app.post('/admin/events/:id/activate', async (req, reply) => {
     const event = requireAdmin(req, reply);
     if (!event) return;

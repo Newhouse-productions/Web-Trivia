@@ -11,6 +11,26 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  // Soft, server-timestamped cue (CLAUDE.md/scope §2). Unlike play.js this
+  // page fully rebuilds every poll (~3s), so rather than fight that with a
+  // per-render interval, one persistent interval looks up the current
+  // .s-timer element by class each tick — it naturally survives the
+  // clear+rebuild cycle without needing to be restarted.
+  function formatRemaining(openedAt, durationSeconds) {
+    const openedAtMs = new Date(openedAt).getTime();
+    const remaining = Math.max(0, durationSeconds - (Date.now() - openedAtMs) / 1000);
+    return `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, '0')}`;
+  }
+  let screenTimerInterval = null;
+  function ensureTimerTicking() {
+    if (screenTimerInterval) return;
+    screenTimerInterval = setInterval(() => {
+      const el = document.querySelector('.s-timer');
+      if (!el) return;
+      el.textContent = formatRemaining(el.dataset.openedAt, Number(el.dataset.duration));
+    }, 1000);
+  }
+
   // Swatch beside the leaderboard row, never a row background or text
   // colour (technical-design §20.4) — team colour is an identifier, not a
   // theme (CLAUDE.md #18).
@@ -168,6 +188,16 @@
       prompt.className = 's-prompt' + (layout === 'statement' ? ' statement' : '');
       prompt.textContent = q.prompt;
       app.appendChild(prompt);
+
+      if (state.timer) {
+        const timerEl = document.createElement('p');
+        timerEl.className = 's-eyebrow s-timer';
+        timerEl.dataset.openedAt = state.timer.opened_at;
+        timerEl.dataset.duration = state.timer.duration_seconds;
+        timerEl.textContent = formatRemaining(state.timer.opened_at, state.timer.duration_seconds);
+        app.appendChild(timerEl);
+        ensureTimerTicking();
+      }
 
       if (q.options) {
         const grid = document.createElement('div');
