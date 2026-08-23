@@ -1,7 +1,7 @@
 // Prepared statements and payload builders shared by the player and ops
 // route modules. Payloads are built by naming fields to include, never by
 // deleting sensitive ones (CLAUDE.md #1).
-import { resolveTheme, isDark } from './theme.js';
+import { resolveTheme, validateContrast, isDark } from './theme.js';
 
 export function buildQueries(db) {
   const getEventById = db.prepare('SELECT * FROM events WHERE id = ?');
@@ -16,6 +16,13 @@ export function buildQueries(db) {
   const insertPlayer = db.prepare('INSERT INTO players (event_id, team_id, username) VALUES (?, ?, ?)');
   const assignCaptainIfEmpty = db.prepare(
     'UPDATE teams SET captain_player_id = ? WHERE id = ? AND captain_player_id IS NULL'
+  );
+  // Recorded once, on the table's first-ever player — a late join is scored
+  // zero for rounds already missed simply by having no answers; this just
+  // makes that fact auditable (scope: "Late tables... joined_at_round
+  // recorded").
+  const setJoinedAtRoundIfEmpty = db.prepare(
+    'UPDATE teams SET joined_at_round = ? WHERE id = ? AND joined_at_round IS NULL'
   );
   const setCaptainCas = db.prepare(
     'UPDATE teams SET captain_player_id = ? WHERE id = ? AND captain_player_id IS ?'
@@ -82,6 +89,34 @@ export function buildQueries(db) {
   const getQuestionsForEvent = db.prepare(
     'SELECT * FROM questions WHERE event_id = ? ORDER BY round, order_no'
   );
+
+  // Every question's resolved theme, validated at 7:1/4.5:1 (CLAUDE.md
+  // #21-22) — shared by the admin theme panel and the host pre-flight
+  // screen, so "themes validated" means the same thing in both places.
+  function allResolvedThemes(eventId) {
+    const event = getEventById.get(eventId);
+    const eventTheme = event.theme ? JSON.parse(event.theme) : null;
+    const questions = getQuestionsForEvent.all(eventId);
+    const roundCache = new Map();
+    const getRoundTheme = (number) => {
+      if (!roundCache.has(number)) {
+        const row = getRoundByNumber.get(eventId, number);
+        roundCache.set(number, row?.theme ? JSON.parse(row.theme) : null);
+      }
+      return roundCache.get(number);
+    };
+
+    const results = questions.map((qu) => {
+      const questionTheme = qu.theme ? JSON.parse(qu.theme) : null;
+      const roundTheme = qu.round ? getRoundTheme(qu.round) : null;
+      const resolved = resolveTheme({ eventTheme, roundTheme, questionTheme });
+      const validation = validateContrast(resolved.colour);
+      return { question_id: qu.id, round: qu.round, order_no: qu.order_no, prompt: qu.prompt, resolved, validation };
+    });
+
+    const eventDefault = resolveTheme({ eventTheme, roundTheme: null, questionTheme: null });
+    return { event_default: { resolved: eventDefault, validation: validateContrast(eventDefault.colour) }, questions: results };
+  }
 
   const getAnswer = db.prepare('SELECT * FROM answers WHERE team_id = ? AND question_id = ?');
   // Scores are derived on read, never stored (CLAUDE.md #13).
@@ -179,10 +214,11 @@ export function buildQueries(db) {
 
   return {
     getEventById, getTeamById, getTeamByToken, getPlayerById, getTeamUsernames,
-    insertPlayer, assignCaptainIfEmpty, setCaptainCas, bumpTableVersion, bumpEventVersion, touchLastSeen,
+    insertPlayer, assignCaptainIfEmpty, setJoinedAtRoundIfEmpty, setCaptainCas, bumpTableVersion, bumpEventVersion, touchLastSeen,
     getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
     getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme, resolveChrome,
+    allResolvedThemes,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }

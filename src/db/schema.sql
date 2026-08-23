@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS events (
   paused          TEXT,
   theme           TEXT,
   chrome          TEXT,
+  total_rounds    INTEGER,
   retention_until TEXT,
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS questions (
   is_reserve     INTEGER NOT NULL DEFAULT 0,
   is_skipped     INTEGER NOT NULL DEFAULT 0,
   theme          TEXT,
+  opened_at      TEXT,
   revealed_at    TEXT,
   UNIQUE (event_id, order_no)
 );

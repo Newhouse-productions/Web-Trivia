@@ -10,7 +10,8 @@ import { readOpsSession, writeOpsSession } from '../opsSession.js';
 import { makeAuditLogger } from '../audit.js';
 import { parseQuestionsCsv } from '../import/questionsCsv.js';
 import { randomToken, randomPin } from '../tokens.js';
-import { resolveTheme, validateContrast, LAYOUTS } from '../theme.js';
+import { LAYOUTS } from '../theme.js';
+import { buildResultsCsv } from '../results.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -96,12 +97,13 @@ export function registerAdminRoutes(app, { db, q }) {
   // each event's admin PIN is its own, so this is not a privilege escalation.
 
   const listEvents = db.prepare(`
-    SELECT e.id, e.name, e.status, e.date,
+    SELECT e.id, e.name, e.status, e.date, e.total_rounds,
            (SELECT COUNT(*) FROM questions WHERE event_id = e.id) AS question_count,
            (SELECT COUNT(*) FROM teams WHERE event_id = e.id AND archived = 0) AS table_count
     FROM events e
     ORDER BY (e.status = 'active') DESC, e.date DESC
   `);
+  const setTotalRounds = db.prepare('UPDATE events SET total_rounds = ? WHERE id = ?');
   const insertBlankEvent = db.prepare(`
     INSERT INTO events (name, status, passphrase, screen_token, host_pin, marker_pin, floor_pin, admin_pin)
     VALUES (?, 'draft', ?, ?, ?, ?, ?, ?)
@@ -145,6 +147,26 @@ export function registerAdminRoutes(app, { db, q }) {
     };
   });
 
+  // Nullable and admin-set only — drives the host's pre-flight/final phase
+  // detection (see /host/state), never auto-inferred from round activity.
+  app.put('/admin/events/:id/total-rounds', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    if (Number(req.params.id) !== event.id) return reply.code(403).send({ error: 'wrong_event_session' });
+
+    const raw = req.body?.total_rounds;
+    const totalRounds = raw === null || raw === '' || raw === undefined ? null : Number(raw);
+    if (totalRounds !== null && (!Number.isInteger(totalRounds) || totalRounds < 1)) {
+      return reply.code(400).send({ error: 'invalid_total_rounds' });
+    }
+    setTotalRounds.run(totalRounds, event.id);
+    logAudit({
+      eventId: event.id, role: 'admin', operator: readOpsSession(req).name,
+      action: 'setTotalRounds', target: 'event', reason: String(totalRounds)
+    });
+    return { ok: true, total_rounds: totalRounds };
+  });
+
   app.post('/admin/events/:id/activate', async (req, reply) => {
     const event = requireAdmin(req, reply);
     if (!event) return;
@@ -163,7 +185,7 @@ export function registerAdminRoutes(app, { db, q }) {
 
     // Refuse to activate with a failing resolved theme (CLAUDE.md #21) —
     // validate the resolved combination, never the layers in isolation.
-    const themes = allResolvedThemes(targetId);
+    const themes = q.allResolvedThemes(targetId);
     const failing = [themes.event_default.validation.pass ? null : 'event default']
       .concat(themes.questions.filter((r) => !r.validation.pass).map((r) => `Q${r.order_no ?? r.question_id}`))
       .filter(Boolean);
@@ -517,42 +539,16 @@ export function registerAdminRoutes(app, { db, q }) {
 
   const setEventTheme = db.prepare('UPDATE events SET theme = ? WHERE id = ?');
   const setEventChrome = db.prepare('UPDATE events SET chrome = ? WHERE id = ?');
-  const getRoundRow = db.prepare('SELECT * FROM rounds WHERE event_id = ? AND number = ?');
   const upsertRoundTheme = db.prepare(`
     INSERT INTO rounds (event_id, number, phase, theme) VALUES (?, ?, 'PLAYING', ?)
     ON CONFLICT(event_id, number) DO UPDATE SET theme = excluded.theme
   `);
   const setQuestionTheme = db.prepare('UPDATE questions SET theme = ?, layout = ? WHERE id = ? AND event_id = ?');
 
-  function allResolvedThemes(eventId) {
-    const event = q.getEventById.get(eventId);
-    const eventTheme = event.theme ? JSON.parse(event.theme) : null;
-    const questions = q.getQuestionsForEvent.all(eventId);
-    const roundCache = new Map();
-    const getRoundTheme = (number) => {
-      if (!roundCache.has(number)) {
-        const row = getRoundRow.get(eventId, number);
-        roundCache.set(number, row?.theme ? JSON.parse(row.theme) : null);
-      }
-      return roundCache.get(number);
-    };
-
-    const results = questions.map((qu) => {
-      const questionTheme = qu.theme ? JSON.parse(qu.theme) : null;
-      const roundTheme = qu.round ? getRoundTheme(qu.round) : null;
-      const resolved = resolveTheme({ eventTheme, roundTheme, questionTheme });
-      const validation = validateContrast(resolved.colour);
-      return { question_id: qu.id, round: qu.round, order_no: qu.order_no, prompt: qu.prompt, resolved, validation };
-    });
-
-    const eventDefault = resolveTheme({ eventTheme, roundTheme: null, questionTheme: null });
-    return { event_default: { resolved: eventDefault, validation: validateContrast(eventDefault.colour) }, questions: results };
-  }
-
   app.get('/admin/theme', async (req, reply) => {
     const event = requireAdmin(req, reply);
     if (!event) return;
-    return allResolvedThemes(event.id);
+    return q.allResolvedThemes(event.id);
   });
 
   app.put('/admin/theme/event', async (req, reply) => {
@@ -614,61 +610,12 @@ export function registerAdminRoutes(app, { db, q }) {
   // results"). Team names and scores only, no usernames — same rule as the
   // retention export (CLAUDE.md/scope §6 data retention).
 
-  function csvField(v) {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
-
-  // Scores are derived on read, never stored (CLAUDE.md #13) — same logic
-  // as the host's scores query, kept local since admin and host routes
-  // don't otherwise share prepared statements.
-  const getScoresForExport = db.prepare(`
-    SELECT t.table_number, t.team_name,
-           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
-           COALESCE((SELECT SUM(points) FROM bonuses b WHERE b.team_id = t.id), 0) AS bonus_points
-    FROM teams t
-    LEFT JOIN answers a ON a.team_id = t.id
-    LEFT JOIN questions q ON q.id = a.question_id
-    WHERE t.event_id = ? AND t.archived = 0
-    GROUP BY t.id
-    ORDER BY (answer_points + bonus_points) DESC, CAST(t.table_number AS INTEGER)
-  `);
-
   app.get('/admin/results/export', async (req, reply) => {
     const event = requireAdmin(req, reply);
     if (!event) return;
 
-    const rows = db.prepare(`
-      SELECT t.table_number, t.team_name, q.round, q.order_no, q.is_practice, q.is_reserve,
-             q.prompt, q.type, q.points, a.value, a.is_correct
-      FROM answers a
-      JOIN teams t ON t.id = a.team_id
-      JOIN questions q ON q.id = a.question_id
-      WHERE a.event_id = ?
-      ORDER BY CAST(t.table_number AS INTEGER), q.round, q.order_no
-    `).all(event.id);
-
-    const header = ['table_number', 'team_name', 'round', 'order_no', 'prompt', 'type', 'points', 'value', 'is_correct', 'points_earned'];
-    const lines = [header.join(',')];
-    for (const r of rows) {
-      const label = r.is_practice ? 'practice' : r.is_reserve ? 'reserve' : String(r.order_no ?? '');
-      const pointsEarned = r.is_correct === 1 ? r.points : 0;
-      lines.push([
-        r.table_number, r.team_name || `Table ${r.table_number}`, r.round ?? '', label, r.prompt,
-        r.type, r.points, r.value, r.is_correct === null ? 'unmarked' : (r.is_correct ? 'correct' : 'wrong'),
-        pointsEarned
-      ].map(csvField).join(','));
-    }
-
-    lines.push('');
-    lines.push('table_number,team_name,final_score');
-    for (const s of getScoresForExport.all(event.id)) {
-      lines.push([s.table_number, s.team_name || `Table ${s.table_number}`, s.answer_points + s.bonus_points]
-        .map(csvField).join(','));
-    }
-
     reply.header('Content-Disposition', `attachment; filename="results-${event.id}.csv"`);
-    return reply.type('text/csv').send(lines.join('\r\n'));
+    return reply.type('text/csv').send(buildResultsCsv(db, event.id));
   });
 
   // --- audit log + database backup (technical-design §9.3, §18) ----------
@@ -710,9 +657,9 @@ export function registerAdminRoutes(app, { db, q }) {
   const insertEventDraft = db.prepare(`
     INSERT INTO events (
       name, subtitle, date, time, venue, entry_fee, beneficiary,
-      status, passphrase, screen_token, host_pin, marker_pin, floor_pin, admin_pin, theme, chrome
+      status, passphrase, screen_token, host_pin, marker_pin, floor_pin, admin_pin, theme, chrome, total_rounds
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertSettingRow = db.prepare('INSERT INTO settings (event_id, key, value) VALUES (?, ?, ?)');
   const insertEventState = db.prepare(
@@ -743,6 +690,7 @@ export function registerAdminRoutes(app, { db, q }) {
       event: {
         name: event.name, subtitle: event.subtitle, date: event.date, time: event.time,
         venue: event.venue, entry_fee: event.entry_fee, beneficiary: event.beneficiary,
+        total_rounds: event.total_rounds,
         theme: event.theme ? JSON.parse(event.theme) : null,
         chrome: event.chrome ? JSON.parse(event.chrome) : null,
         settings: Object.fromEntries(getSettingsForExport.all(event.id).map((s) => [s.key, s.value]))
@@ -788,7 +736,8 @@ export function registerAdminRoutes(app, { db, q }) {
         randomToken(12).toLowerCase(), randomToken(12),
         randomPin(), randomPin(), randomPin(), randomPin(),
         themeOnly ? JSON.stringify(themeOnly) : null,
-        chrome ? JSON.stringify(chrome) : null
+        chrome ? JSON.stringify(chrome) : null,
+        Number.isInteger(ev.total_rounds) ? ev.total_rounds : null
       );
 
       for (const t of config.tables || []) {

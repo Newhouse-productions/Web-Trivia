@@ -210,6 +210,17 @@
     app.appendChild(vitals); // flush with the console's top edge, not inset
     hostEls.vitals = vitals;
 
+    // Three fixed sections, built once and never torn down — only one is
+    // visible at a time (state.phase decides which). Rebuilding "active"
+    // per phase-switch would lose the pause form's typed-but-unsaved text
+    // and the bonus grid's selection; toggling display doesn't.
+    const preflightBody = document.createElement('div');
+    preflightBody.className = 'cbody';
+    preflightBody.style.display = 'none';
+    app.appendChild(preflightBody);
+    hostEls.preflightBody = preflightBody;
+    buildPreflightSection(preflightBody);
+
     const cbody = document.createElement('div');
     cbody.className = 'cbody';
     app.appendChild(cbody);
@@ -266,6 +277,13 @@
     buildTableSupport(cbody);
     buildScoresPanel(cbody);
 
+    const finalBody = document.createElement('div');
+    finalBody.className = 'cbody';
+    finalBody.style.display = 'none';
+    app.appendChild(finalBody);
+    hostEls.finalBody = finalBody;
+    buildFinalSection(finalBody);
+
     window.addEventListener('keydown', hostKeydown);
 
     refreshHost();
@@ -296,20 +314,90 @@
     return cell;
   }
 
+  // One tile per question, reused by the active question list and the
+  // pre-flight screen's single "current question" row — same state-machine
+  // logic either way. Keyboard shortcuts are only wired for the active
+  // list (keyboard=true); the pre-flight tile is click-only.
+  function buildQuestionTile(qu, state, { keyboard = false } = {}) {
+    const row = document.createElement('div');
+    row.className = 'tile flat';
+
+    const label = document.createElement('span');
+    label.textContent = qu.is_practice ? `Practice: ${qu.prompt}` : `R${qu.round} Q${qu.order_no}: ${qu.prompt}`;
+    row.appendChild(label);
+
+    const isCurrent = state.current && state.current.id === qu.id;
+    const currentState = isCurrent ? state.current.state : null;
+
+    const openLabel = isCurrent && state.current.av_cue ? 'Open after clip' : 'Open';
+    const actions = [
+      { state: 'PENDING', label: 'Show', enabled: !isCurrent },
+      { state: 'OPEN', label: openLabel, enabled: isCurrent && currentState === 'PENDING', kbd: 'Space' },
+      { state: 'CLOSED', label: 'Close', enabled: isCurrent && currentState === 'OPEN', kbd: 'C' },
+      { state: 'REVEALED', label: 'Reveal', enabled: isCurrent && currentState === 'CLOSED', kbd: 'R' },
+      { state: 'OPEN', label: 'Reopen', enabled: isCurrent && (currentState === 'CLOSED' || currentState === 'REVEALED') }
+    ];
+
+    actions.forEach((action) => {
+      if (!action.enabled) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn sm';
+      btn.textContent = action.label + ' ';
+      if (action.kbd && keyboard) {
+        const kbd = document.createElement('kbd');
+        kbd.textContent = action.kbd;
+        btn.appendChild(kbd);
+      }
+      btn.addEventListener('click', () => sendCommand(qu.id, action.state));
+      row.appendChild(btn);
+
+      // Space always progresses the CURRENT question only (never "Show",
+      // which switches to a different question — too consequential for
+      // one keystroke). C/R are scoped the same way.
+      if (keyboard) {
+        if (action.kbd === 'Space') hostPrimaryAction = { questionId: qu.id, state: action.state };
+        if (action.kbd === 'C') hostCloseAction = { questionId: qu.id };
+        if (action.kbd === 'R') hostRevealAction = { questionId: qu.id };
+      }
+    });
+
+    return row;
+  }
+
   function renderHost(state) {
     lastState = state;
     applyTheme(state.theme);
 
+    // Phase is resolved server-side (state.phase) — this just shows
+    // whichever of the three fixed sections it's told to, never infers
+    // "are we done yet" itself (CLAUDE.md #21's principle, applied here).
+    hostEls.preflightBody.style.display = state.phase === 'preflight' ? '' : 'none';
+    hostEls.cbody.style.display = state.phase === 'active' ? '' : 'none';
+    hostEls.finalBody.style.display = state.phase === 'final' ? '' : 'none';
+
     clear(hostEls.vitals);
     hostEls.vitals.append(
       vitalCell('Round', state.round_progress
-        ? `${state.round_progress.number} · Q${state.round_progress.index}/${state.round_progress.total}`
+        ? `${state.round_progress.number}${state.total_rounds ? ` of ${state.total_rounds}` : ''} · Q${state.round_progress.index}/${state.round_progress.total}`
         : state.round_phase),
       vitalCell('Question', state.current ? state.current.state : '—'),
       vitalCell('Marking', `${state.marking.marked}/${state.marking.total}`, state.marking.marked < state.marking.total),
       vitalCell('Tables', `${state.tables_live.live}/${state.tables_live.total}`, state.tables_live.live < state.tables_live.total),
       vitalCell('Version', `v${state.version}`)
     );
+
+    // Keyboard shortcuts only ever act on the active list — reset every
+    // render so a stale action from a previous phase can never fire.
+    hostPauseAction = doPause;
+    hostResumeAction = doResume;
+    hostPrimaryAction = null;
+    hostCloseAction = null;
+    hostRevealAction = null;
+
+    if (state.phase === 'preflight') renderPreflight(state);
+    if (state.phase === 'final') renderFinal(state);
+    if (state.phase !== 'active') return;
 
     // The tally is the one live thing in the room — it answers the host's
     // one question: wait, or move on (design-handover: bLive).
@@ -345,56 +433,172 @@
       hostEls.pauseStatus.style.display = 'none';
     }
 
-    hostPauseAction = doPause;
-    hostResumeAction = doResume;
-    hostPrimaryAction = null;
-    hostCloseAction = null;
-    hostRevealAction = null;
-
     clear(hostEls.list);
     state.questions.forEach((qu) => {
+      hostEls.list.appendChild(buildQuestionTile(qu, state, { keyboard: true }));
+    });
+  }
+
+  // --- pre-flight: before round 1 opens (design-handover: hPreflight) -----
+
+  function buildPreflightSection(container) {
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s2)';
+    heading.textContent = 'Before doors';
+    container.appendChild(heading);
+
+    const checklist = document.createElement('div');
+    checklist.className = 'stack';
+    container.appendChild(checklist);
+    hostEls.preflightChecklist = checklist;
+
+    const rule = document.createElement('hr');
+    rule.className = 'rule';
+    container.appendChild(rule);
+
+    const roomLabel = document.createElement('div');
+    roomLabel.className = 'label';
+    roomLabel.style.marginBottom = 'var(--s2)';
+    container.appendChild(roomLabel);
+    hostEls.preflightRoomLabel = roomLabel;
+
+    const tally = document.createElement('div');
+    tally.className = 'tally';
+    container.appendChild(tally);
+    hostEls.preflightTally = tally;
+
+    const rule2 = document.createElement('hr');
+    rule2.className = 'rule';
+    container.appendChild(rule2);
+
+    const currentWrap = document.createElement('div');
+    currentWrap.className = 'stack';
+    container.appendChild(currentWrap);
+    hostEls.preflightCurrent = currentWrap;
+  }
+
+  function checklistTile(label, ok, detail) {
+    const row = document.createElement('div');
+    row.className = 'tile flat';
+    const text = document.createElement('span');
+    text.textContent = label;
+    const mark = document.createElement('span');
+    mark.className = 'mark status ' + (ok ? 'ok' : 'wait');
+    mark.textContent = detail;
+    row.append(text, mark);
+    return row;
+  }
+
+  function renderPreflight(state) {
+    const p = state.preflight;
+    if (!p) return;
+    clear(hostEls.preflightChecklist);
+    hostEls.preflightChecklist.append(
+      checklistTile('Question set', p.question_count > 0, `${p.question_count} loaded`),
+      checklistTile('AV cues', true, `${p.av_cue_count} set`),
+      checklistTile('Themes validated', p.themes.event_default.validation.pass && p.themes.questions.every((q) => q.validation.pass),
+        p.themes.questions.filter((q) => q.validation.pass).length + '/' + p.themes.questions.length + ' pass'),
+      checklistTile('Tables checked in', state.tables_live.live === state.tables_live.total, `${state.tables_live.live} of ${state.tables_live.total}`)
+    );
+
+    hostEls.preflightRoomLabel.textContent = 'Room';
+    clear(hostEls.preflightTally);
+    state.answered.tables.forEach((t) => {
+      const cell = document.createElement('div');
+      cell.className = 't' + (t.answered ? ' in' : '');
+      cell.textContent = String(t.table_number);
+      hostEls.preflightTally.appendChild(cell);
+    });
+
+    clear(hostEls.preflightCurrent);
+    const currentLabel = document.createElement('div');
+    currentLabel.className = 'label';
+    currentLabel.style.marginBottom = 'var(--s2)';
+    currentLabel.textContent = 'Current';
+    hostEls.preflightCurrent.appendChild(currentLabel);
+    if (state.current) {
+      const qu = state.questions.find((x) => x.id === state.current.id);
+      if (qu) hostEls.preflightCurrent.appendChild(buildQuestionTile(qu, state));
+    }
+
+    // Quick access to the practice question — only offered if it isn't
+    // already the one showing (design-handover: hPreflight).
+    if (p.practice_question && !(state.current && state.current.id === p.practice_question.id)) {
+      const practiceBtn = document.createElement('button');
+      practiceBtn.type = 'button';
+      practiceBtn.className = 'btn ghost wide';
+      practiceBtn.style.marginTop = 'var(--s3)';
+      practiceBtn.textContent = 'Send the practice question';
+      practiceBtn.addEventListener('click', () => sendCommand(p.practice_question.id, 'PENDING'));
+      hostEls.preflightCurrent.appendChild(practiceBtn);
+    }
+
+    const startBtn = document.createElement('button');
+    startBtn.type = 'button';
+    startBtn.className = 'btn wide';
+    startBtn.style.marginTop = 'var(--s3)';
+    startBtn.textContent = 'Start round 1';
+    startBtn.addEventListener('click', () => {
+      const firstReal = state.questions.find((qu) => !qu.is_practice);
+      if (firstReal) sendCommand(firstReal.id, 'PENDING');
+    });
+    hostEls.preflightCurrent.appendChild(startBtn);
+  }
+
+  // --- final: every round published (design-handover: hFinal) -------------
+
+  function buildFinalSection(container) {
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s2)';
+    heading.textContent = 'All rounds complete';
+    container.appendChild(heading);
+
+    const list = document.createElement('div');
+    list.className = 'lb';
+    container.appendChild(list);
+    hostEls.finalList = list;
+
+    const exportBtn = document.createElement('button');
+    exportBtn.type = 'button';
+    exportBtn.className = 'btn ghost wide';
+    exportBtn.style.marginTop = 'var(--s4)';
+    exportBtn.textContent = 'Export results (CSV)';
+    exportBtn.addEventListener('click', () => { window.location.href = '/host/results/export'; });
+    container.appendChild(exportBtn);
+  }
+
+  let finalScoresLoadedForVersion = null;
+  async function renderFinal(state) {
+    if (finalScoresLoadedForVersion === state.version) return;
+    finalScoresLoadedForVersion = state.version;
+    const res = await fetch('/host/scores', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    clear(hostEls.finalList);
+    data.scores.forEach((s, i) => {
       const row = document.createElement('div');
-      row.className = 'tile flat';
-
-      const label = document.createElement('span');
-      label.textContent = `R${qu.round} Q${qu.order_no}: ${qu.prompt}`;
-      row.appendChild(label);
-
-      const isCurrent = state.current && state.current.id === qu.id;
-      const currentState = isCurrent ? state.current.state : null;
-
-      const openLabel = isCurrent && state.current.av_cue ? 'Open after clip' : 'Open';
-      const actions = [
-        { state: 'PENDING', label: 'Show', enabled: !isCurrent },
-        { state: 'OPEN', label: openLabel, enabled: isCurrent && currentState === 'PENDING', kbd: 'Space' },
-        { state: 'CLOSED', label: 'Close', enabled: isCurrent && currentState === 'OPEN', kbd: 'C' },
-        { state: 'REVEALED', label: 'Reveal', enabled: isCurrent && currentState === 'CLOSED', kbd: 'R' },
-        { state: 'OPEN', label: 'Reopen', enabled: isCurrent && (currentState === 'CLOSED' || currentState === 'REVEALED') }
-      ];
-
-      actions.forEach((action) => {
-        if (!action.enabled) return;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn sm';
-        btn.textContent = action.label + ' ';
-        if (action.kbd) {
-          const kbd = document.createElement('kbd');
-          kbd.textContent = action.kbd;
-          btn.appendChild(kbd);
-        }
-        btn.addEventListener('click', () => sendCommand(qu.id, action.state));
-        row.appendChild(btn);
-
-        // Space always progresses the CURRENT question only (never "Show",
-        // which switches to a different question — too consequential for
-        // one keystroke). C/R are scoped the same way.
-        if (action.kbd === 'Space') hostPrimaryAction = { questionId: qu.id, state: action.state };
-        if (action.kbd === 'C') hostCloseAction = { questionId: qu.id };
-        if (action.kbd === 'R') hostRevealAction = { questionId: qu.id };
-      });
-
-      hostEls.list.appendChild(row);
+      row.className = 'lb-row' + (i === 0 ? ' lead' : '');
+      const pos = document.createElement('span');
+      pos.className = 'pos num';
+      pos.textContent = String(i + 1);
+      const swatchCss = s.colour ? (s.colour.type === 'gradient' ? `linear-gradient(135deg, ${s.colour.from}, ${s.colour.to})` : s.colour.from) : null;
+      row.appendChild(pos);
+      if (swatchCss) {
+        const swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = swatchCss;
+        row.appendChild(swatch);
+      }
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = s.team_name;
+      const score = document.createElement('span');
+      score.className = 'score num';
+      score.textContent = String(s.score);
+      row.append(name, score);
+      hostEls.finalList.appendChild(row);
     });
   }
 
@@ -1005,8 +1209,34 @@
         row.className = 'tile flat' + (e.status === 'active' ? ' seated' : '');
         const label = document.createElement('span');
         const current = e.id === data.current_event_id ? ' — this session' : '';
-        label.textContent = `${e.name} — ${e.status} — ${e.question_count} questions, ${e.table_count} tables${current}`;
+        const rounds = e.total_rounds ? `, ${e.total_rounds} rounds` : ', rounds not set';
+        label.textContent = `${e.name} — ${e.status} — ${e.question_count} questions, ${e.table_count} tables${rounds}${current}`;
         row.appendChild(label);
+
+        // Drives the host's pre-flight/final phase detection (see
+        // /host/state) — nullable, and unset means final never auto-fires.
+        if (e.id === data.current_event_id) {
+          const roundsInput = document.createElement('input');
+          roundsInput.className = 'field';
+          roundsInput.type = 'number';
+          roundsInput.min = '1';
+          roundsInput.style.width = '80px';
+          roundsInput.placeholder = 'Rounds';
+          roundsInput.value = e.total_rounds ?? '';
+          const roundsSaveBtn = document.createElement('button');
+          roundsSaveBtn.type = 'button';
+          roundsSaveBtn.className = 'btn ghost sm';
+          roundsSaveBtn.textContent = 'Save rounds';
+          roundsSaveBtn.addEventListener('click', async () => {
+            const res2 = await fetch(`/admin/events/${e.id}/total-rounds`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ total_rounds: roundsInput.value ? Number(roundsInput.value) : null })
+            });
+            msg.textContent = res2.ok ? 'Saved.' : 'Could not save total rounds.';
+            refreshEvents();
+          });
+          row.append(roundsInput, roundsSaveBtn);
+        }
 
         if (e.status !== 'active' && e.id === data.current_event_id) {
           const activateBtn = document.createElement('button');

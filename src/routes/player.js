@@ -200,6 +200,15 @@ export function registerPlayerRoutes(app, { db, q }) {
       const join = db.transaction(() => {
         const { lastInsertRowid } = q.insertPlayer.run(event.id, team.id, username);
         q.assignCaptainIfEmpty.run(lastInsertRowid, team.id);
+        // Which round was live when this table's first player showed up —
+        // scope: "Late tables score zero for missed rounds... joined_at_round
+        // recorded." Only the current question's round is known here (no
+        // dedicated round-number field on event_state), and it may be null
+        // for a practice/reserve question — that's fine, it just means we
+        // couldn't attribute a round yet, not that anything is broken.
+        const es = q.getEventState.get(event.id);
+        const current = es?.current_question_id ? q.getQuestionById.get(es.current_question_id) : null;
+        if (current?.round != null) q.setJoinedAtRoundIfEmpty.run(current.round, team.id);
         q.bumpTableVersion.run(team.id);
         return lastInsertRowid;
       });

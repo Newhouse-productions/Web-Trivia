@@ -24,11 +24,11 @@ const seed = db.transaction(() => {
   `);
 
   const { lastInsertRowid: eventId } = db.prepare(`
-    INSERT INTO events (name, date, status, passphrase, screen_token, host_pin, marker_pin, floor_pin, admin_pin)
-    VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?)
+    INSERT INTO events (name, date, status, passphrase, screen_token, host_pin, marker_pin, floor_pin, admin_pin, total_rounds)
+    VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
   `).run(
     'Dev Trivia Night', '2026-08-22', 'amber otter', randomToken(12),
-    '111111', '222222', '333333', '444444'
+    '111111', '222222', '333333', '444444', 1
   );
 
   const insertTeam = db.prepare(`
@@ -54,6 +54,14 @@ const seed = db.transaction(() => {
     'Who wrote Great Expectations?',
     JSON.stringify(['Charles Dickens', 'Jane Austen', 'Mark Twain', 'Leo Tolstoy']),
     'Charles Dickens'
+  );
+
+  db.prepare(`
+    INSERT INTO questions (event_id, round, order_no, type, prompt, options, correct_answer, points, is_practice)
+    VALUES (?, NULL, NULL, 'mcq', ?, ?, ?, 0, 1)
+  `).run(
+    eventId, 'What colour is the sky?',
+    JSON.stringify(['Blue', 'Green', 'Purple']), 'Blue'
   );
 
   db.prepare(`INSERT INTO rounds (event_id, number, phase) VALUES (?, 1, 'PLAYING')`).run(eventId);

@@ -10,6 +10,7 @@ import {
   checkRoleLockout, recordRoleFailure, recordRoleSuccess
 } from '../pinLimiter.js';
 import { makeAuditLogger } from '../audit.js';
+import { buildResultsCsv } from '../results.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -37,6 +38,10 @@ export function registerOpsRoutes(app, { db, q }) {
   const getActiveEvent = db.prepare("SELECT * FROM events WHERE status = 'active'");
   const deleteMarkingClaim = db.prepare('DELETE FROM marking_claims WHERE question_id = ?');
   const markRevealed = db.prepare('UPDATE questions SET revealed_at = ? WHERE id = ? AND revealed_at IS NULL');
+  // First open only — mirrors markRevealed's guard exactly. Drives
+  // pre-flight detection (has any real round-1 question ever opened) and
+  // the optional timer's start point.
+  const markOpened = db.prepare('UPDATE questions SET opened_at = ? WHERE id = ? AND opened_at IS NULL');
 
   const getAnsweredGrid = db.prepare(`
     SELECT t.id AS team_id, t.table_number,
@@ -195,8 +200,25 @@ export function registerOpsRoutes(app, { db, q }) {
       : [];
     const questionIndexInRound = current ? roundQuestions.findIndex((qu) => qu.id === current.id) : -1;
 
+    // Phase is resolved here, once, server-side — the client renders
+    // whichever view it's told, it never infers "are we done yet" itself
+    // (same principle as the theme cascade, CLAUDE.md #21). Opening the
+    // practice question deliberately doesn't end pre-flight — only a real
+    // round-1 question does.
+    const anyRealQuestionOpened = questions.some((qu) => !qu.is_practice && qu.opened_at);
+    const highestPublished = q.getPublishedRound.get(event.id);
+    const phase = !anyRealQuestionOpened
+      ? 'preflight'
+      : (event.total_rounds && highestPublished && highestPublished.number >= event.total_rounds)
+        ? 'final'
+        : 'active';
+
+    const practiceQuestion = questions.find((qu) => qu.is_practice);
+
     return {
       version: event.version,
+      phase,
+      total_rounds: event.total_rounds,
       round_phase: es.round_phase,
       paused: event.paused ? JSON.parse(event.paused) : null,
       theme: q.resolveCurrentTheme(event, current),
@@ -215,7 +237,13 @@ export function registerOpsRoutes(app, { db, q }) {
       questions: questions.map((qu) => ({
         id: qu.id, round: qu.round, order_no: qu.order_no, type: qu.type,
         prompt: qu.prompt, points: qu.points, is_practice: !!qu.is_practice
-      }))
+      })),
+      preflight: phase === 'preflight' ? {
+        question_count: questions.length,
+        av_cue_count: questions.filter((qu) => qu.av_cue).length,
+        themes: q.allResolvedThemes(event.id),
+        practice_question: practiceQuestion ? { id: practiceQuestion.id, prompt: practiceQuestion.prompt } : null
+      } : null
     };
   });
 
@@ -271,6 +299,7 @@ export function registerOpsRoutes(app, { db, q }) {
       // acting legitimately in opposite directions; the host wins
       // (technical-design §6.2).
       if (isReopen) deleteMarkingClaim.run(questionId);
+      if (targetState === 'OPEN') markOpened.run(new Date().toISOString(), questionId);
       if (targetState === 'REVEALED') markRevealed.run(new Date().toISOString(), questionId);
       logAudit({
         eventId: event.id, role: 'host', operator: ops.name, action: 'setQuestion',
@@ -390,6 +419,19 @@ export function registerOpsRoutes(app, { db, q }) {
     }));
 
     return { scores, recent_bonuses: getRecentBonuses.all(event.id) };
+  });
+
+  // Same CSV as the admin export (src/results.js) — the host's own session
+  // can't hit an admin-guarded route, and the final screen is where this is
+  // actually needed on the night.
+  app.get('/host/results/export', async (req, reply) => {
+    const ops = readOpsSession(req);
+    if (!ops || ops.role !== 'host') return reply.code(403).send({ error: 'forbidden' });
+    const event = q.getEventById.get(ops.eventId);
+    if (!event || event.status !== 'active') return reply.code(409).send({ error: 'event_not_running' });
+
+    reply.header('Content-Disposition', `attachment; filename="results-${event.id}.csv"`);
+    return reply.type('text/csv').send(buildResultsCsv(db, event.id));
   });
 
   app.post('/host/bonus', async (req, reply) => {

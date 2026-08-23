@@ -27,6 +27,15 @@ export function migrate(db) {
   // before it doesn't, and "is this question still current" alone can't
   // tell the two apart once the host advances.
   addColumn('questions', 'revealed_at', 'TEXT');
+  // First-open timestamp, stamped once and never overwritten by a reopen —
+  // same guard shape as revealed_at. Drives both pre-flight detection (has
+  // any real round-1 question ever opened) and the optional per-question
+  // timer's start point.
+  addColumn('questions', 'opened_at', 'TEXT');
+  // Nullable: existing events without this set simply never auto-detect a
+  // "final" phase, which is the safe default (scope decision: pre-flight/
+  // final host screens are derived from this, not a manual toggle).
+  addColumn('events', 'total_rounds', 'INTEGER');
 
   // round/order_no started NOT NULL; practice/reserve questions need them
   // nullable. SQLite can't drop a NOT NULL constraint in place, so rebuild.
