@@ -42,7 +42,7 @@ export function registerOpsRoutes(app, { db, q }) {
     SELECT t.id AS team_id, t.table_number,
            EXISTS(SELECT 1 FROM answers a WHERE a.team_id = t.id AND a.question_id = ?) AS answered
     FROM teams t WHERE t.event_id = ? AND t.archived = 0
-    ORDER BY t.table_number
+    ORDER BY CAST(t.table_number AS INTEGER)
   `);
 
   // "Live" is a presence heuristic for the vitals strip and pre-flight, not
@@ -86,7 +86,7 @@ export function registerOpsRoutes(app, { db, q }) {
     WHERE t.event_id = ? AND t.archived = 0
     GROUP BY t.id
     ORDER BY (answer_points + bonus_points) DESC, round3_points DESC, round2_points DESC,
-             text_correct_count DESC, t.table_number
+             text_correct_count DESC, CAST(t.table_number AS INTEGER)
   `);
   const getRecentBonuses = db.prepare(`
     SELECT b.team_id, t.table_number, b.points, b.reason, b.awarded_by, b.awarded_at

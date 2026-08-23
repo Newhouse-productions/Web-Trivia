@@ -107,7 +107,7 @@ export function buildQueries(db) {
   `);
 
   const getTeamsForEvent = db.prepare(
-    'SELECT * FROM teams WHERE event_id = ? AND archived = 0 ORDER BY table_number'
+    'SELECT * FROM teams WHERE event_id = ? AND archived = 0 ORDER BY CAST(table_number AS INTEGER)'
   );
 
   function resolveSessionContext(session) {

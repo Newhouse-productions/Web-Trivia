@@ -41,7 +41,7 @@ export function registerMarkerRoutes(app, { db, q }) {
            t.table_number, t.team_name
     FROM answers a JOIN teams t ON t.id = a.team_id
     WHERE a.question_id = ?
-    ORDER BY t.table_number
+    ORDER BY CAST(t.table_number AS INTEGER)
   `);
   const setMark = db.prepare(
     'UPDATE answers SET is_correct = ?, marked_by = ?, marked_at = ? WHERE team_id = ? AND question_id = ?'

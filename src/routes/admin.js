@@ -349,7 +349,7 @@ export function registerAdminRoutes(app, { db, q }) {
     const event = requireAdmin(req, reply);
     if (!event) return;
     const tables = db.prepare(
-      'SELECT id, table_number, seats, colour, archived, token FROM teams WHERE event_id = ? ORDER BY table_number'
+      'SELECT id, table_number, seats, colour, archived, token FROM teams WHERE event_id = ? ORDER BY CAST(table_number AS INTEGER)'
     ).all(event.id);
     return { tables };
   });
@@ -474,7 +474,7 @@ export function registerAdminRoutes(app, { db, q }) {
     if (!event) return;
 
     const tables = db.prepare(
-      'SELECT table_number, token, colour FROM teams WHERE event_id = ? AND archived = 0 ORDER BY table_number'
+      'SELECT table_number, token, colour FROM teams WHERE event_id = ? AND archived = 0 ORDER BY CAST(table_number AS INTEGER)'
     ).all(event.id);
 
     const base = baseUrl(req);
@@ -631,7 +631,7 @@ export function registerAdminRoutes(app, { db, q }) {
     LEFT JOIN questions q ON q.id = a.question_id
     WHERE t.event_id = ? AND t.archived = 0
     GROUP BY t.id
-    ORDER BY (answer_points + bonus_points) DESC, t.table_number
+    ORDER BY (answer_points + bonus_points) DESC, CAST(t.table_number AS INTEGER)
   `);
 
   app.get('/admin/results/export', async (req, reply) => {
@@ -645,7 +645,7 @@ export function registerAdminRoutes(app, { db, q }) {
       JOIN teams t ON t.id = a.team_id
       JOIN questions q ON q.id = a.question_id
       WHERE a.event_id = ?
-      ORDER BY t.table_number, q.round, q.order_no
+      ORDER BY CAST(t.table_number AS INTEGER), q.round, q.order_no
     `).all(event.id);
 
     const header = ['table_number', 'team_name', 'round', 'order_no', 'prompt', 'type', 'points', 'value', 'is_correct', 'points_earned'];
@@ -700,7 +700,7 @@ export function registerAdminRoutes(app, { db, q }) {
 
   const SCHEMA_VERSION = 1;
   const getTablesForExport = db.prepare(
-    'SELECT table_number, seats, colour FROM teams WHERE event_id = ? AND archived = 0 ORDER BY table_number'
+    'SELECT table_number, seats, colour FROM teams WHERE event_id = ? AND archived = 0 ORDER BY CAST(table_number AS INTEGER)'
   );
   const getSettingsForExport = db.prepare('SELECT key, value FROM settings WHERE event_id = ?');
   const getRoundsForExport = db.prepare('SELECT number, theme FROM rounds WHERE event_id = ? ORDER BY number');

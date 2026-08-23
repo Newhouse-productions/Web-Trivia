@@ -13,7 +13,7 @@ export function registerFloorRoutes(app, { db, q }) {
            (SELECT username FROM players p WHERE p.id = t.captain_player_id) AS captain_name,
            (SELECT COUNT(*) FROM answers a WHERE a.team_id = t.id AND a.question_id = ?) AS answered_current
     FROM teams t WHERE t.event_id = ? AND t.archived = 0
-    ORDER BY t.table_number
+    ORDER BY CAST(t.table_number AS INTEGER)
   `);
   const getTeamPlayers = db.prepare('SELECT id, username FROM players WHERE team_id = ? ORDER BY username');
   const setTeamName = db.prepare('UPDATE teams SET team_name = ? WHERE id = ?');
