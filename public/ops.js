@@ -69,7 +69,7 @@
     pbody.appendChild(stack);
   }
 
-  function renderPinForm(role) {
+  function renderPinForm(role, prefill) {
     clear(app);
     const pbody = document.createElement('div');
     pbody.className = 'cbody';
@@ -147,6 +147,19 @@
         button.disabled = false;
       }
     });
+
+    // Convenience for sharing a direct link during setup/testing — same
+    // POST /ops/login, same rate limiter, just pre-filled and auto-submitted
+    // rather than typed. A PIN in a URL still leaks to history/access logs
+    // the way CLAUDE.md #4 flags for table tokens, so this stays a
+    // deliberate opt-in via query string, never the default flow. Must run
+    // after the listener above is attached, or requestSubmit() falls back
+    // to a native form submission and reloads the page.
+    if (prefill?.name) nameInput.value = prefill.name;
+    if (prefill?.pin) {
+      input.value = prefill.pin;
+      form.requestSubmit();
+    }
   }
 
   function renderNotBuilt(role) {
@@ -1933,5 +1946,16 @@
     cbody.appendChild(back);
   }
 
-  renderRolePicker();
+  // Direct-link convenience: /ops?role=host&pin=111111&name=Sam skips
+  // straight to a pre-filled, auto-submitted sign-in — see the comment in
+  // renderPinForm for the tradeoff this accepts.
+  (function bootstrap() {
+    const params = new URLSearchParams(location.search);
+    const role = params.get('role');
+    if (['host', 'marker', 'floor', 'admin'].includes(role)) {
+      renderPinForm(role, { pin: params.get('pin'), name: params.get('name') });
+    } else {
+      renderRolePicker();
+    }
+  })();
 })();

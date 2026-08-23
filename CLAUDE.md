@@ -143,6 +143,24 @@ other table. Two markers on one question is the worst available bug.
 
 ---
 
+## Design
+
+Implementation reference: `docs/DESIGN-HANDOVER.md`, mockups in
+`docs/trivia-design-system.html`.
+
+One typeface (Archivo variable) where width encodes role: 62 narrow for labels, 100 for body,
+125 weight 800 for display. Every element is a tile on a board — do not introduce card, panel
+or accordion metaphors.
+
+Nine theme tokens are the only overridable values. Everything else is fixed. Resolve the
+cascade server-side and emit the resolved nine on the document element.
+
+Selected, correct, wrong and unanswered are signalled by shape, weight and words as well as
+colour — never colour alone. 16px minimum body text, 44px minimum targets, visible focus
+rings, reduced motion respected.
+
+---
+
 ## Stack — hold the line
 
 Node LTS · Fastify · `better-sqlite3` · no frontend framework · no build step · Caddy ·

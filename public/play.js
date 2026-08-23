@@ -270,6 +270,19 @@
         button.disabled = false;
       }
     });
+
+    // Convenience for sharing a direct link during setup/testing — same
+    // POST /gate, same rate limiter, just pre-filled and auto-submitted
+    // rather than typed. A passphrase in a URL still leaks to history/
+    // access logs the way CLAUDE.md #4 flags for table tokens, so this
+    // stays a deliberate opt-in via query string, never the default flow.
+    // Must run after the listener above is attached, or requestSubmit()
+    // falls back to a native form submission and reloads the page.
+    const prefillPassphrase = new URLSearchParams(location.search).get('passphrase');
+    if (prefillPassphrase) {
+      input.value = prefillPassphrase;
+      form.requestSubmit();
+    }
   }
 
   function renderName(team) {

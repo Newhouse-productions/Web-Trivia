@@ -39,7 +39,14 @@ export function registerPlayerRoutes(app, { db, q }) {
       gateOk: sameEvent ? existing.gateOk : false
     });
 
-    return reply.redirect('/play', 302);
+    // Direct-link convenience (see public/play.js's renderGate): forward an
+    // explicit ?passphrase= so it survives this redirect and can auto-fill
+    // the gate. Only this one known param is forwarded, never the raw query
+    // string, and it never touches the session — the gate still runs the
+    // same POST /gate + rate limiter either way.
+    const passphrase = req.query?.passphrase;
+    const dest = passphrase ? `/play?passphrase=${encodeURIComponent(passphrase)}` : '/play';
+    return reply.redirect(dest, 302);
   });
 
   // --- state / version (technical-design §4-5) ----------------------------
