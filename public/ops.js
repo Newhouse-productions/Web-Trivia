@@ -1032,9 +1032,21 @@
     }
   }
 
+  // Set only by addAlias, cleared only when a genuinely different question
+  // is opened — so the summary screen's "you accepted X for all tables"
+  // note survives the re-render after accepting, and after any further
+  // individual marks on the same question, but never leaks onto a
+  // different question.
+  let markerAliasAcceptedFor = null;
+  let markerAliasAcceptedValue = null;
+
   async function openMarkerDetail(questionId) {
     if (markerPollHandle) markerPollHandle.stop();
     clear(app);
+    if (markerAliasAcceptedFor !== questionId) {
+      markerAliasAcceptedFor = null;
+      markerAliasAcceptedValue = null;
+    }
 
     const res = await fetch(`/marker/question/${questionId}`, { cache: 'no-store' });
     if (!res.ok) { startMarker(); return; }
@@ -1047,6 +1059,12 @@
 
     const pending = data.answers.filter((a) => a.is_correct === null);
     const judgedCount = data.answers.length - pending.length;
+    const qLabel = data.question.round != null ? `${data.question.round}.${data.question.order_no}` : 'Reserve';
+
+    if (data.summary) {
+      markerCurrentAnswer = null; // Y/N must not fire against a stale answer once everything's judged
+      renderMarkerSummary(cbody, questionId, data, qLabel);
+    } else {
 
     const headRow = document.createElement('div');
     headRow.style.display = 'flex';
@@ -1075,13 +1093,7 @@
       (data.question.aliases.length ? ` · also accepting ${data.question.aliases.join(', ')}` : '');
     cbody.appendChild(answer);
 
-    if (!pending.length) {
-      const notice = document.createElement('div');
-      notice.className = 'notice ok';
-      notice.style.marginTop = 'var(--s4)';
-      notice.textContent = 'All answers judged for this question.';
-      cbody.appendChild(notice);
-    } else {
+    if (pending.length) {
       const a = pending[0];
       const card = document.createElement('div');
       card.className = 'tile flat';
@@ -1136,6 +1148,7 @@
 
       markerCurrentAnswer = { questionId, teamId: a.team_id, value: a.value };
     }
+    }
 
     const rule = document.createElement('hr');
     rule.className = 'rule';
@@ -1160,6 +1173,94 @@
     if (!markerKeydownAttached) {
       window.addEventListener('keydown', markerKeydown);
       markerKeydownAttached = true;
+    }
+  }
+
+  // "A short summary rather than straight to the next question — the
+  // moment you'd notice 18 wrong answers and suspect the answer key, not
+  // the room" (design mockup: mQueue "3 · Question done").
+  function renderMarkerSummary(container, questionId, data, qLabel) {
+    const headRow = document.createElement('div');
+    headRow.style.display = 'flex';
+    headRow.style.justifyContent = 'space-between';
+    const complete = document.createElement('span');
+    complete.className = 'label';
+    complete.textContent = `${qLabel} · complete`;
+    const roundLabel = document.createElement('span');
+    roundLabel.className = 'label';
+    roundLabel.textContent = data.question.round != null ? `Round ${data.question.round}` : '';
+    headRow.append(complete, roundLabel);
+    container.appendChild(headRow);
+
+    const heading = document.createElement('h1');
+    heading.className = 'display';
+    heading.style.fontSize = 'var(--t-h2)';
+    heading.style.margin = 'var(--s2) 0 var(--s3)';
+    heading.textContent = `${qLabel} marked`;
+    container.appendChild(heading);
+
+    const counts = document.createElement('div');
+    counts.className = 'stack';
+    const countRow = (label, n, ok) => {
+      const row = document.createElement('div');
+      row.className = 'tile flat';
+      const text = document.createElement('span');
+      text.textContent = label;
+      const mark = document.createElement('span');
+      mark.className = 'mark status ' + (ok ? 'ok' : n > 0 ? 'bad' : 'wait');
+      mark.textContent = `${n} table${n === 1 ? '' : 's'}`;
+      row.append(text, mark);
+      return row;
+    };
+    counts.append(
+      countRow('Correct', data.summary.correct_count, true),
+      countRow('Wrong', data.summary.wrong_count, false),
+      countRow('No answer', data.summary.no_answer_count, false)
+    );
+    container.appendChild(counts);
+
+    if (markerAliasAcceptedFor === questionId && markerAliasAcceptedValue) {
+      const note = document.createElement('p');
+      note.className = 'note';
+      note.style.marginTop = 'var(--s3)';
+      note.textContent = `You accepted "${markerAliasAcceptedValue}" for all tables.`;
+      container.appendChild(note);
+    }
+
+    if (data.summary.round_progress.length) {
+      const rule = document.createElement('hr');
+      rule.className = 'rule';
+      container.appendChild(rule);
+
+      const progressRow = document.createElement('div');
+      progressRow.style.display = 'flex';
+      progressRow.style.justifyContent = 'space-between';
+      progressRow.style.alignItems = 'center';
+      const progressLabel = document.createElement('span');
+      progressLabel.className = 'label';
+      progressLabel.textContent = 'Round progress';
+      const pills = document.createElement('span');
+      pills.style.display = 'flex';
+      pills.style.gap = 'var(--s2)';
+      data.summary.round_progress.forEach((r) => {
+        const pill = document.createElement('span');
+        pill.className = 'status ' + (r.marked ? 'ok' : 'wait');
+        pill.textContent = `${data.question.round}.${r.order_no}`;
+        pills.appendChild(pill);
+      });
+      progressRow.append(progressLabel, pills);
+      container.appendChild(progressRow);
+
+      const nextUnmarked = data.summary.round_progress.find((r) => !r.marked && r.id !== questionId);
+      if (nextUnmarked) {
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'btn wide';
+        nextBtn.style.marginTop = 'var(--s3)';
+        nextBtn.textContent = `Next question · ${data.question.round}.${nextUnmarked.order_no}`;
+        nextBtn.addEventListener('click', () => openMarkerDetail(nextUnmarked.id));
+        container.appendChild(nextBtn);
+      }
     }
   }
 
@@ -1191,6 +1292,8 @@
 
   async function addAlias(questionId, alias) {
     markerCurrentAnswer = null;
+    markerAliasAcceptedFor = questionId;
+    markerAliasAcceptedValue = alias;
     await fetch('/marker/alias', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

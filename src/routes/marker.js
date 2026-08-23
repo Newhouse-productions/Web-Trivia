@@ -48,6 +48,19 @@ export function registerMarkerRoutes(app, { db, q }) {
   );
   const updateAliases = db.prepare('UPDATE questions SET aliases = ? WHERE id = ?');
   const getAnswersForQuestion = db.prepare('SELECT team_id, value FROM answers WHERE question_id = ?');
+  const getTeamCount = db.prepare('SELECT COUNT(*) AS n FROM teams WHERE event_id = ? AND archived = 0');
+  // Other text questions in the same round, marked or not — the summary
+  // screen's round-progress pills (design mockup: "3 · Question done").
+  const getRoundTextQuestions = db.prepare(`
+    SELECT q.id, q.order_no,
+           COUNT(a.question_id) AS total_answers,
+           COALESCE(SUM(CASE WHEN a.is_correct IS NULL THEN 1 ELSE 0 END), 0) AS unmarked_count
+    FROM questions q
+    LEFT JOIN answers a ON a.question_id = q.id
+    WHERE q.event_id = ? AND q.round = ? AND q.type = 'text'
+    GROUP BY q.id
+    ORDER BY q.order_no
+  `);
 
   function requireMarker(req, reply) {
     const ops = readOpsSession(req);
@@ -153,18 +166,35 @@ export function registerMarkerRoutes(app, { db, q }) {
     }
     renewClaim(event, questionId, markerName);
 
+    const answers = getQuestionAnswers.all(questionId).map((a) => ({
+      team_id: a.team_id, table_number: a.table_number, team_name: a.team_name,
+      value: a.value, is_correct: a.is_correct === null ? null : !!a.is_correct,
+      marked_by: a.marked_by, marked_at: a.marked_at
+    }));
+
+    const allMarked = answers.length > 0 && answers.every((a) => a.is_correct !== null);
+    const teamCount = getTeamCount.get(event.id).n;
+
     return {
       theme: q.resolveCurrentTheme(event, question),
       question: {
-        id: question.id, prompt: question.prompt,
+        id: question.id, round: question.round, order_no: question.order_no, prompt: question.prompt,
         correct_answer: question.correct_answer,
         aliases: question.aliases ? JSON.parse(question.aliases) : []
       },
-      answers: getQuestionAnswers.all(questionId).map((a) => ({
-        team_id: a.team_id, table_number: a.table_number, team_name: a.team_name,
-        value: a.value, is_correct: a.is_correct === null ? null : !!a.is_correct,
-        marked_by: a.marked_by, marked_at: a.marked_at
-      }))
+      answers,
+      // Only computed once every answer that exists has been judged — the
+      // summary screen (design mockup: "3 · Question done").
+      summary: allMarked ? {
+        correct_count: answers.filter((a) => a.is_correct === true).length,
+        wrong_count: answers.filter((a) => a.is_correct === false).length,
+        no_answer_count: Math.max(0, teamCount - answers.length),
+        round_progress: question.round != null
+          ? getRoundTextQuestions.all(event.id, question.round).map((r) => ({
+              id: r.id, order_no: r.order_no, marked: r.total_answers > 0 && r.unmarked_count === 0
+            }))
+          : []
+      } : null
     };
   });
 
