@@ -68,7 +68,10 @@ export function resolveTheme({ eventTheme, roundTheme, questionTheme }) {
   }
   const layout = LAYOUTS.includes(merged.layout) ? merged.layout : DEFAULT_LAYOUT;
   const colour = deriveTokens({ bg: merged.bg, bg2: merged.bg2, accent: merged.accent });
-  return { layout, colour };
+  // Fixed correct/wrong/pending colours have separate dark/light variants
+  // (design-system tokens.css) and must never be derived from the theme's
+  // own bg/accent — the client picks the right pair from this flag alone.
+  return { layout, colour, dark: isDark(colour.bg) };
 }
 
 // Contrast validated at 7:1 for projection, 4.5:1 for phone token pairs

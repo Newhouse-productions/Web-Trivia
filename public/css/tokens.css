@@ -1,0 +1,112 @@
+/* ==========================================================================
+   Trivia night — design tokens
+   One typeface, Archivo variable. Width encodes role:
+     62%  narrow uppercase  → labels, eyebrows, metadata
+     100% normal            → body, prompts, options
+     125% expanded, 800     → display, big screen, scores
+
+   The nine --bg/--bg2/--surface/--surface-selected/--text/--text-muted/
+   --border/--accent/--accent-text tokens are the only values a theme may
+   override (CLAUDE.md #19/#21) — resolved server-side per event/round/
+   question cascade and emitted here as inline custom properties on
+   <html>. --correct/--wrong/--pending are fixed and never themed: a warm
+   brass accent must never double as "this was right" (that bug existed
+   before this token set — screen.js used to borrow --accent for a
+   correct-answer highlight).
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-variable.woff2') format('woff2-variations');
+  font-weight: 400 900;
+  font-stretch: 62% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg:               #10151F;
+  --bg2:              #17202E;
+  --surface:          #1B2432;
+  --surface-selected: #2D3B50;
+  --text:             #F2F0EA;
+  --text-muted:       #8D98A8;
+  --border:           #2E3A4C;
+  --accent:           #E8A33D;
+  --accent-text:      #16191C;
+
+  --correct:          #4E9E6A;
+  --wrong:            #C4593C;
+  --pending:          #8D98A8;
+
+  --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --w-narrow: 62;
+  --w-wide: 125;
+
+  --t-label:   0.6875rem;
+  --t-small:   0.8125rem;
+  --t-body:    1rem;
+  --t-lead:    1.25rem;
+  --t-h3:      1.5rem;
+  --t-h2:      1.9375rem;
+  --t-h1:      2.4375rem;
+
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  --r-tile: 10px;
+  --r-chip: 999px;
+  --tap: 44px;
+  --seat: inset 0 2px 0 rgba(0,0,0,.35);
+  --lift: 0 1px 0 rgba(255,255,255,.05), 0 2px 8px rgba(0,0,0,.28);
+}
+
+:root[data-theme="light"] {
+  --bg:               #EFEBE2;
+  --bg2:              #E5E0D5;
+  --surface:          #F8F6F1;
+  --surface-selected: #E2DACA;
+  --text:             #16191C;
+  --text-muted:       #6B6357;
+  --border:           #CFC7B8;
+  --accent:           #9A5B18;
+  --accent-text:      #FFFFFF;
+  --correct:          #2F6B45;
+  --wrong:             #973C22;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  font-variation-settings: 'wdth' 100;
+  color: var(--text);
+  background: var(--bg);
+  font-size: var(--t-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.label {
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  font-size: var(--t-label);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.display {
+  font-variation-settings: 'wdth' var(--w-wide), 'wght' 800;
+  letter-spacing: -.015em;
+  line-height: 1.08;
+}
+.num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+.muted { color: var(--text-muted); }
+.stack { display: flex; flex-direction: column; }
+.stack > * + * { margin-top: var(--s3); }
+
+.rule { height: 1px; background: var(--border); border: 0; margin: var(--s4) 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

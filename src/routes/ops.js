@@ -198,6 +198,8 @@ export function registerOpsRoutes(app, { db, q }) {
     return {
       version: event.version,
       round_phase: es.round_phase,
+      paused: event.paused ? JSON.parse(event.paused) : null,
+      theme: q.resolveCurrentTheme(event, current),
       round_progress: current && questionIndexInRound !== -1
         ? { number: current.round, index: questionIndexInRound + 1, total: roundQuestions.length }
         : null,

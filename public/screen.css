@@ -1,100 +1,116 @@
-/* Projector-scale defaults (CLAUDE.md #22): no pure black/white, 7:1
-   contrast, big text readable from the back of the room. Colours are CSS
-   custom properties so the resolved theme (CLAUDE.md #19-21) can repaint
-   this page live; these are just the pre-theme fallback values. */
-:root {
-  --bg: #1a1a1a;
-  --surface: #262626;
-  --text: #f5f5f0;
-  --text-muted: #cccccc;
-  --border: #444444;
-  --accent: #4ade80;
-  --accent-text: #16191c;
+/* Big screen. Colours come entirely from css/tokens.css (resolved theme,
+   CLAUDE.md #19-21) — this file only holds projector-scale layout. Type is
+   in cqw against #app's own inline size (container-type below) so it
+   scales with the actual projector rather than assuming a resolution
+   (design-handover §6). No pure black/white, 7:1 contrast (CLAUDE.md #22)
+   — enforced server-side by src/theme.js, not here. */
+
+html, body {
+  height: 100%;
+  margin: 0;
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  padding: 40px;
-  font-size: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
+  container-type: inline-size;
+  overflow: hidden;
 }
 
-#app { width: 100%; max-width: 1400px; text-align: center; }
+#app {
+  width: 100%;
+  height: 100vh;
+  padding: 4.5%;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, var(--bg), var(--bg2));
+  color: var(--text);
+}
 
-.screen-title { font-size: 3rem; margin-bottom: 24px; }
-.screen-prompt { font-size: 2.5rem; margin: 32px 0; }
-.screen-prompt.statement { font-size: 3.4rem; font-weight: 800; }
+.s-eyebrow {
+  font-variation-settings: 'wdth' 62, 'wght' 700;
+  font-size: 2.1cqw;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
 
-.screen-options {
+.s-prompt {
+  font-variation-settings: 'wdth' 125, 'wght' 800;
+  font-size: 4.8cqw;
+  line-height: 1.12;
+  letter-spacing: -.015em;
+  margin: 1.6cqw 0 0;
+}
+.s-prompt.statement { font-size: 6.4cqw; }
+
+.s-opts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 32px;
+  gap: 1.3cqw;
+  margin-top: 2cqw;
 }
-
-.screen-option {
-  border: 3px solid var(--border);
-  border-radius: 16px;
-  padding: 24px;
-  font-size: 1.5rem;
-  background: var(--surface);
-}
-
-.screen-option.correct { border-color: var(--accent); }
-
-.screen-spread-count { font-size: 1.25rem; color: var(--text-muted); margin-top: 8px; }
-
-.screen-leaderboard { text-align: left; max-width: 800px; margin: 0 auto; }
-
-.screen-swatch {
-  display: inline-block;
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  vertical-align: -5px;
-  margin-right: 12px;
-}
-.screen-leaderboard-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 1.75rem;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.screen-answered { font-size: 1.25rem; color: var(--text-muted); margin-top: 16px; }
-
-/* Chrome: logo top corner inside the 5% safe margin, footer band full-width
-   at the bottom. Set once at event level, never cascading (CLAUDE.md #20).
-   The footer reduces the content area (body's padding-bottom, set in JS)
-   rather than overlapping it. */
-.screen-logo {
-  position: fixed;
-  top: 5%;
-  right: 5%;
-  height: 5vw;
-  max-height: 64px;
-  border-radius: 6px;
-  background: var(--surface);
-  padding: 6px 10px;
-}
-
-.screen-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 64px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
+.s-opt {
   display: flex;
   align-items: center;
-  padding: 0 5%;
-  font-size: 1.1rem;
+  gap: 1.2cqw;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .9cqw;
+  padding: 1.4cqw 1.6cqw;
+  font-size: 2.9cqw;
+  font-weight: 600;
 }
+.s-opt.correct { border-color: var(--correct); border-width: 2px; }
+.s-opt .c {
+  width: 3.4cqw; height: 3.4cqw; flex: none;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-variation-settings: 'wdth' 62, 'wght' 700;
+  font-size: 1.8cqw;
+  color: var(--text-muted);
+}
+.s-spread { font-size: 1.6cqw; color: var(--text-muted); margin-left: auto; }
+
+.s-lb { display: flex; flex-direction: column; gap: .7cqw; margin-top: 1.6cqw; }
+.s-lb-row {
+  display: flex; align-items: center; gap: 1.2cqw;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: .9cqw; padding: 1.4cqw 1.6cqw;
+  font-size: 2.6cqw;
+}
+.s-lb-row.lead { border-color: var(--accent); border-width: 2px; }
+.s-lb-row .pos {
+  font-variation-settings: 'wdth' 125, 'wght' 800;
+  min-width: 2.6cqw;
+  color: var(--text-muted);
+}
+.s-lb-row.lead .pos { color: var(--accent); }
+.s-lb-row .swatch { width: .7cqw; align-self: stretch; border-radius: .3cqw; flex: none; }
+.s-lb-row .name { flex: 1; font-weight: 600; }
+.s-lb-row .score { font-variation-settings: 'wdth' 125, 'wght' 800; }
+
+.s-foot {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 7.5cqw;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 4.5%;
+  color: var(--text-muted);
+  font-size: 1.9cqw;
+}
+.s-logo {
+  position: absolute; top: 3.2%; right: 3.4%;
+  height: 5cqw; max-height: 64px;
+  border-radius: .5cqw;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.s-tally { display: grid; grid-template-columns: repeat(15, 1fr); gap: .5cqw; margin-top: auto; }
+.s-tally .t { aspect-ratio: 1 / 1.15; border-radius: .35cqw; border: 1px solid var(--border); }
+.s-tally .t.in { background: var(--accent); border-color: var(--accent); }
+.s-tally .t.out { border-color: var(--wrong); }

@@ -98,6 +98,7 @@ export function registerMarkerRoutes(app, { db, q }) {
 
     return {
       version: event.version,
+      theme: q.resolveCurrentTheme(event, null),
       questions: rows.map((row) => ({
         id: row.id, round: row.round, order_no: row.order_no, prompt: row.prompt,
         total_answers: row.total_answers, unmarked_count: row.unmarked_count,
@@ -153,6 +154,7 @@ export function registerMarkerRoutes(app, { db, q }) {
     renewClaim(event, questionId, markerName);
 
     return {
+      theme: q.resolveCurrentTheme(event, question),
       question: {
         id: question.id, prompt: question.prompt,
         correct_answer: question.correct_answer,

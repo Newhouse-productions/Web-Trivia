@@ -44,10 +44,11 @@ export function registerFloorRoutes(app, { db, q }) {
     if (!ctx) return;
     const es = q.getEventState.get(ctx.event.id);
     const currentId = es.current_question_id || 0;
+    const current = currentId ? q.getQuestionById.get(currentId) : null;
     const teams = getTeamsWithStatus.all(currentId, ctx.event.id).map((t) => ({
       ...t, colour: t.colour ? JSON.parse(t.colour) : null
     }));
-    return { teams, question_open: es.question_status === 'OPEN' };
+    return { teams, question_open: es.question_status === 'OPEN', theme: q.resolveCurrentTheme(ctx.event, current) };
   });
 
   app.get('/floor/team/:id', async (req, reply) => {
@@ -61,6 +62,7 @@ export function registerFloorRoutes(app, { db, q }) {
     const ourAnswer = current ? q.getAnswer.get(team.id, current.id) : null;
 
     return {
+      theme: q.resolveCurrentTheme(ctx.event, current),
       team: {
         id: team.id, table_number: team.table_number, team_name: team.team_name,
         token: team.token, captain_player_id: team.captain_player_id

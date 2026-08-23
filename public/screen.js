@@ -2,6 +2,8 @@
 // URL already granted access at exchange time. Re-renders whole sections on
 // version change; nothing here holds keyboard focus so the "never over
 // focus" concern (CLAUDE.md #15) doesn't bite the way it does on /play.
+// Type is sized in cqw against #app's own inline size (container-type set
+// in screen.css) so it scales with the actual projector, not the viewport.
 (function () {
   const app = document.getElementById('app');
 
@@ -26,12 +28,15 @@
     const root = document.documentElement.style;
     const c = theme.colour;
     root.setProperty('--bg', c.bg);
+    root.setProperty('--bg2', c.bg2);
     root.setProperty('--surface', c.surface);
+    root.setProperty('--surface-selected', c['surface-selected']);
     root.setProperty('--text', c.text);
     root.setProperty('--text-muted', c['text-muted']);
     root.setProperty('--border', c.border);
     root.setProperty('--accent', c.accent);
     root.setProperty('--accent-text', c['accent-text']);
+    document.documentElement.dataset.theme = theme.dark ? 'dark' : 'light';
   }
 
   async function refresh() {
@@ -44,28 +49,43 @@
   // content area rather than overlapping it, so a statement layout's
   // oversized prompt never runs under it.
   function renderChrome(chrome) {
-    const existingFooter = document.querySelector('.screen-footer');
+    const existingFooter = app.querySelector('.s-foot');
     if (existingFooter) existingFooter.remove();
-    const existingLogo = document.querySelector('.screen-logo');
+    const existingLogo = app.querySelector('.s-logo');
     if (existingLogo) existingLogo.remove();
-    document.body.style.paddingBottom = '';
+    app.style.paddingBottom = '';
 
     if (!chrome) return;
 
     if (chrome.logo) {
       const logo = document.createElement('img');
-      logo.className = 'screen-logo';
+      logo.className = 's-logo';
       logo.src = chrome.logo;
       logo.alt = '';
-      document.body.appendChild(logo);
+      app.appendChild(logo);
     }
     if (chrome.footer) {
       const footer = document.createElement('div');
-      footer.className = 'screen-footer';
-      footer.textContent = chrome.footer;
-      document.body.appendChild(footer);
-      document.body.style.paddingBottom = '80px';
+      footer.className = 's-foot';
+      const label = document.createElement('span');
+      label.textContent = chrome.footer;
+      footer.appendChild(label);
+      app.appendChild(footer);
+      // Read the rendered height back so the content area truly stops
+      // above it rather than guessing a fixed px value (CLAUDE.md #20).
+      app.style.paddingBottom = `calc(4.5% + ${footer.getBoundingClientRect().height}px)`;
     }
+  }
+
+  function tally(count, total, outstanding) {
+    const grid = document.createElement('div');
+    grid.className = 's-tally';
+    for (let i = 1; i <= total; i++) {
+      const cell = document.createElement('div');
+      cell.className = 't' + (i <= count ? ' in' : '') + (outstanding && outstanding.includes(i) ? ' out' : '');
+      grid.appendChild(cell);
+    }
+    return grid;
   }
 
   function render(state) {
@@ -75,48 +95,55 @@
 
     if (state.stage === 'no_session' || state.stage === 'event_not_running') {
       const p = document.createElement('p');
-      p.className = 'screen-title';
+      p.className = 's-prompt';
       p.textContent = "This event isn't running right now.";
       app.appendChild(p);
       return;
     }
 
-    const title = document.createElement('p');
-    title.className = 'screen-title';
-    title.textContent = state.event_name;
-    app.appendChild(title);
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 's-eyebrow';
+    eyebrow.textContent = state.event_name;
+    app.appendChild(eyebrow);
 
     if (state.stage === 'holding') {
       const p = document.createElement('p');
-      p.className = 'screen-prompt';
-      p.textContent = 'Scan the QR code at your table to join.';
+      p.className = 's-prompt statement';
+      p.textContent = 'Scan the code on your table';
       app.appendChild(p);
       return;
     }
 
     if (state.stage === 'leaderboard') {
       const heading = document.createElement('p');
-      heading.className = 'screen-prompt';
+      heading.className = 's-prompt';
+      heading.style.fontSize = '4cqw';
       heading.textContent = `Leaderboard — Round ${state.round}`;
       app.appendChild(heading);
 
       const list = document.createElement('div');
-      list.className = 'screen-leaderboard';
+      list.className = 's-lb';
       state.leaderboard.forEach((row, i) => {
         const line = document.createElement('div');
-        line.className = 'screen-leaderboard-row';
-        const rank = document.createElement('span');
+        line.className = 's-lb-row' + (i === 0 ? ' lead' : '');
+        const pos = document.createElement('span');
+        pos.className = 'pos';
+        pos.textContent = String(i + 1);
+        line.appendChild(pos);
         const swatchCss = colourCss(row.colour);
         if (swatchCss) {
           const swatch = document.createElement('span');
-          swatch.className = 'screen-swatch';
+          swatch.className = 'swatch';
           swatch.style.background = swatchCss;
-          rank.appendChild(swatch);
+          line.appendChild(swatch);
         }
-        rank.appendChild(document.createTextNode(`${i + 1}. ${row.team_name}`));
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = row.team_name;
         const score = document.createElement('span');
+        score.className = 'score';
         score.textContent = String(row.score);
-        line.append(rank, score);
+        line.append(name, score);
         list.appendChild(line);
       });
       app.appendChild(list);
@@ -131,58 +158,72 @@
       // the prompt until the host opens it (CLAUDE.md #1).
       if (q.state === 'PENDING') {
         const holding = document.createElement('p');
-        holding.className = 'screen-prompt';
+        holding.className = 's-prompt statement';
         holding.textContent = layout === 'media' ? 'Listen carefully…' : `Round ${state.round}`;
         app.appendChild(holding);
         return;
       }
 
       const prompt = document.createElement('p');
-      prompt.className = 'screen-prompt' + (layout === 'statement' ? ' statement' : '');
+      prompt.className = 's-prompt' + (layout === 'statement' ? ' statement' : '');
       prompt.textContent = q.prompt;
       app.appendChild(prompt);
 
       if (q.options) {
         const grid = document.createElement('div');
-        grid.className = 'screen-options';
-        q.options.forEach((opt) => {
+        grid.className = 's-opts';
+        q.options.forEach((opt, i) => {
           const card = document.createElement('div');
-          card.className = 'screen-option';
+          card.className = 's-opt';
+          // Fixed --correct, never the theme's own --accent (a warm brass
+          // accent must never double as "this was right").
           if (q.state === 'REVEALED' && opt === q.correct_answer) card.classList.add('correct');
 
-          const label = document.createElement('div');
+          const chip = document.createElement('span');
+          chip.className = 'c';
+          chip.textContent = String.fromCharCode(65 + i);
+          const label = document.createElement('span');
           label.textContent = opt;
-          card.appendChild(label);
+          card.append(chip, label);
 
           if (q.spread) {
             const found = q.spread.find((s) => s.option === opt);
-            const count = document.createElement('div');
-            count.className = 'screen-spread-count';
+            const count = document.createElement('span');
+            count.className = 's-spread';
             const n = found ? found.count : 0;
             count.textContent = `${n} ${n === 1 ? 'table' : 'tables'}`;
             card.appendChild(count);
           }
           if (q.state === 'REVEALED' && opt === q.correct_answer) {
-            const badge = document.createElement('div');
-            badge.textContent = '✓ Correct';
-            card.appendChild(badge);
+            // Border highlight (above) plus a word, never colour alone
+            // (CLAUDE.md #16) — sized in cqw like the rest of this surface,
+            // not the phone-scale .status component.
+            const mark = document.createElement('span');
+            mark.style.marginLeft = 'auto';
+            mark.style.color = 'var(--correct)';
+            mark.style.fontWeight = '700';
+            mark.style.fontSize = '1.8cqw';
+            mark.textContent = 'Correct';
+            card.appendChild(mark);
           }
           grid.appendChild(card);
         });
         app.appendChild(grid);
       } else if (q.state === 'REVEALED') {
         const answer = document.createElement('p');
-        answer.className = 'screen-prompt';
+        answer.className = 's-prompt';
         answer.textContent = `Answer: ${q.correct_answer}`;
         app.appendChild(answer);
       }
 
-      const answered = document.createElement('p');
-      answered.className = 'screen-answered';
-      answered.textContent = q.state === 'OPEN'
-        ? `${state.answered.count}/${state.answered.total} tables have answered`
-        : '';
-      app.appendChild(answered);
+      if (q.state === 'OPEN') {
+        const answered = document.createElement('p');
+        answered.className = 's-eyebrow';
+        answered.style.marginTop = '1.6cqw';
+        answered.textContent = `${state.answered.count} / ${state.answered.total} answered`;
+        app.appendChild(answered);
+        app.appendChild(tally(state.answered.count, state.answered.total, null));
+      }
     }
   }
 

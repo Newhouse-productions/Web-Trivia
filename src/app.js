@@ -23,6 +23,9 @@ const STYLE_CSS = readFileSync(join(PUBLIC_DIR, 'style.css'), 'utf8');
 const POLL_JS = readFileSync(join(PUBLIC_DIR, 'poll.js'), 'utf8');
 const PLAY_JS = readFileSync(join(PUBLIC_DIR, 'play.js'), 'utf8');
 const SCREEN_CSS = readFileSync(join(PUBLIC_DIR, 'screen.css'), 'utf8');
+const TOKENS_CSS = readFileSync(join(PUBLIC_DIR, 'css', 'tokens.css'), 'utf8');
+const COMPONENTS_CSS = readFileSync(join(PUBLIC_DIR, 'css', 'components.css'), 'utf8');
+const ARCHIVO_WOFF2 = readFileSync(join(PUBLIC_DIR, 'fonts', 'archivo-variable.woff2'));
 
 // Dynamic, per-request responses that must never be cached (CLAUDE.md
 // Conventions + #4/#5). Static assets above are exempt.
@@ -62,6 +65,13 @@ export function buildApp() {
   app.get('/poll.js', async (req, reply) => reply.type('application/javascript').send(POLL_JS));
   app.get('/play.js', async (req, reply) => reply.type('application/javascript').send(PLAY_JS));
   app.get('/screen.css', async (req, reply) => reply.type('text/css').send(SCREEN_CSS));
+  app.get('/css/tokens.css', async (req, reply) => reply.type('text/css').send(TOKENS_CSS));
+  app.get('/css/components.css', async (req, reply) => reply.type('text/css').send(COMPONENTS_CSS));
+  app.get('/fonts/archivo-variable.woff2', async (req, reply) => {
+    reply.type('font/woff2');
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+    return reply.send(ARCHIVO_WOFF2);
+  });
 
   registerPlayerRoutes(app, { db, q });
   registerOpsRoutes(app, { db, q });

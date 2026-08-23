@@ -108,7 +108,8 @@ export function registerPlayerRoutes(app, { db, q }) {
           round: round.number,
           leaderboard: board,
           our_place: place === -1 ? null : place + 1,
-          team: { table_number: team.table_number, team_name: team.team_name }
+          team: { table_number: team.table_number, team_name: team.team_name },
+          theme: q.resolveCurrentTheme(event, null)
         };
       }
     }

@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia night — design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..900&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   Trivia night — design tokens
+   One typeface, Archivo variable. Width encodes role:
+     62%  narrow uppercase  → labels, eyebrows, metadata
+     100% normal            → body, prompts, options
+     125% expanded, 800     → display, big screen, scores
+   ========================================================================== */
+
+:root {
+  /* --- theme tokens: the only values a theme may override --- */
+  --bg:               #10151F;
+  --bg2:              #17202E;
+  --surface:          #1B2432;
+  --surface-selected: #2D3B50;
+  --text:             #F2F0EA;
+  --text-muted:       #8D98A8;
+  --border:           #2E3A4C;
+  --accent:           #E8A33D;
+  --accent-text:      #16191C;
+
+  /* --- semantic, derived from theme, never themed directly --- */
+  --correct:          #4E9E6A;
+  --wrong:            #C4593C;
+  --pending:          #8D98A8;
+
+  /* --- type --- */
+  --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --w-narrow: 62;
+  --w-wide: 125;
+
+  /* --- scale: 1.25 ratio, tabular where numbers matter --- */
+  --t-label:   0.6875rem;  /* 11px  narrow caps, tracked */
+  --t-small:   0.8125rem;  /* 13px */
+  --t-body:    1rem;       /* 16px  never smaller on a phone */
+  --t-lead:    1.25rem;
+  --t-h3:      1.5rem;
+  --t-h2:      1.9375rem;
+  --t-h1:      2.4375rem;
+
+  /* --- space: 4px base --- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  /* --- form --- */
+  --r-tile: 10px;
+  --r-chip: 999px;
+  --tap: 44px;
+  --seat: inset 0 2px 0 rgba(0,0,0,.35);
+  --lift: 0 1px 0 rgba(255,255,255,.05), 0 2px 8px rgba(0,0,0,.28);
+}
+
+[data-theme="light"] {
+  --bg:               #EFEBE2;
+  --bg2:              #E5E0D5;
+  --surface:          #F8F6F1;
+  --surface-selected: #E2DACA;
+  --text:             #16191C;
+  --text-muted:       #6B6357;
+  --border:           #CFC7B8;
+  --accent:           #9A5B18;
+  --accent-text:      #FFFFFF;
+  --correct:          #2F6B45;
+  --wrong:            #973C22;
+}
+
+/* ==========================================================================
+   Primitives
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.tn {
+  font-family: var(--font);
+  font-variation-settings: 'wdth' 100;
+  color: var(--text);
+  font-size: var(--t-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* width-as-role */
+.label {
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  font-size: var(--t-label);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.display {
+  font-variation-settings: 'wdth' var(--w-wide), 'wght' 800;
+  letter-spacing: -.015em;
+  line-height: 1.08;
+}
+.num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+.muted { color: var(--text-muted); }
+.stack > * + * { margin-top: var(--s3); }
+
+/* ==========================================================================
+   Signature: the tile
+   Everything on every surface is a tile on a board.
+   ========================================================================== */
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--tap);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-body);
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: var(--lift);
+  transition: background .12s ease, border-color .12s ease, transform .08s ease;
+}
+.tile:hover { border-color: var(--text-muted); }
+.tile:active { transform: translateY(1px); }
+.tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* seated = selected. Shape + weight + inset, never colour alone. */
+.tile.seated {
+  background: var(--surface-selected);
+  border-color: var(--text);
+  border-width: 2px;
+  padding: calc(var(--s3) - 1px) calc(var(--s4) - 1px);
+  font-weight: 700;
+  box-shadow: var(--seat);
+  transform: translateY(1px);
+}
+.tile[disabled] { cursor: default; opacity: .62; box-shadow: none; }
+.tile.flat { box-shadow: none; cursor: default; }
+
+/* letter chip on an option */
+.chip {
+  flex: none;
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 700;
+  font-size: var(--t-small);
+}
+.tile.seated .chip {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+.tile .mark { margin-left: auto; flex: none; font-size: var(--t-small); }
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--tap);
+  padding: 0 var(--s5);
+  border-radius: var(--r-tile);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit; font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--lift);
+  transition: transform .08s ease, filter .12s ease;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn:active { transform: translateY(1px); box-shadow: var(--seat); }
+.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn.wide { width: 100%; }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+.btn.ghost:hover { border-color: var(--text-muted); }
+.btn.danger { background: transparent; color: var(--wrong); border-color: var(--wrong); }
+.btn[disabled] { background: var(--surface); border-color: var(--border); color: var(--text-muted); cursor: default; box-shadow: none; }
+.btn.sm { min-height: 34px; padding: 0 var(--s3); font-size: var(--t-small); }
+
+kbd {
+  font: inherit; font-size: 10px;
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 4px; padding: 1px 5px;
+  color: var(--text-muted); background: var(--bg);
+}
+
+/* ==========================================================================
+   Form
+   ========================================================================== */
+
+.field {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+  color: var(--text);
+  font: inherit; font-size: var(--t-body);
+}
+.field::placeholder { color: var(--text-muted); }
+.field:focus { outline: 3px solid var(--accent); outline-offset: 2px; border-color: var(--text); }
+
+/* ==========================================================================
+   Status — always shape + word, never colour alone
+   ========================================================================== */
+
+.status {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 700;
+  font-size: var(--t-label); letter-spacing: .1em; text-transform: uppercase;
+}
+.status::before {
+  content: ''; width: 10px; height: 10px; flex: none;
+  border: 2px solid currentColor;
+}
+.status.ok      { color: var(--correct); }
+.status.ok::before { border-radius: 50%; background: currentColor; }
+.status.bad     { color: var(--wrong); }
+.status.bad::before { transform: rotate(45deg); }
+.status.wait    { color: var(--pending); }
+.status.wait::before { border-radius: 50%; }
+
+/* ==========================================================================
+   Team colour band — identity, constant, never the content area
+   ========================================================================== */
+
+.band {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid rgba(0,0,0,.35);
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+.band .table-no {
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  font-size: var(--t-label); letter-spacing: .12em; text-transform: uppercase;
+  opacity: .88;
+}
+
+/* ==========================================================================
+   Vitals strip — operator surfaces
+   ========================================================================== */
+
+.vitals { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--surface); }
+.vital { padding: var(--s2) var(--s4); border-right: 1px solid var(--border); flex: 1; min-width: 92px; }
+.vital .k { display: block; font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+.vital .v { font-variation-settings: 'wdth' 100, 'wght' 700; font-size: var(--t-small); font-variant-numeric: tabular-nums; }
+.vital .v.alert { color: var(--accent); }
+
+/* ==========================================================================
+   Tally strip — the signature on the big screen and the console.
+   30 lozenges that fill as tables answer.
+   ========================================================================== */
+
+.tally { display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px; }
+.tally .t {
+  aspect-ratio: 1 / 1.15;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  display: grid; place-items: center;
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 700;
+  font-size: 10px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tally .t.in { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.tally .t.out { border-color: var(--wrong); color: var(--wrong); }
+.tally .t.us { outline: 2px solid var(--text); outline-offset: 1px; }
+
+/* ==========================================================================
+   Leaderboard
+   ========================================================================== */
+
+.lb { display: flex; flex-direction: column; gap: var(--s2); }
+.lb-row {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+}
+.lb-row .pos {
+  font-variation-settings: 'wdth' var(--w-wide), 'wght' 800;
+  font-size: var(--t-lead); font-variant-numeric: tabular-nums;
+  color: var(--text-muted); min-width: 1.6em;
+}
+.lb-row.lead { border-color: var(--accent); border-width: 2px; padding: calc(var(--s3) - 1px) calc(var(--s4) - 1px); }
+.lb-row.lead .pos { color: var(--accent); }
+.lb-row .swatch { width: 8px; align-self: stretch; border-radius: 3px; flex: none; }
+.lb-row .name { flex: 1; font-weight: 600; }
+.lb-row .score {
+  font-variation-settings: 'wdth' var(--w-wide), 'wght' 800;
+  font-size: var(--t-h3); font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Notices
+   ========================================================================== */
+
+.notice {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  font-size: var(--t-small);
+}
+.notice.bad { border-left-color: var(--wrong); }
+.notice.ok { border-left-color: var(--correct); }
+
+.rule { height: 1px; background: var(--border); border: 0; margin: var(--s4) 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+</style>
+<style>
+/* ---------- page chrome (not part of the shipped system) ---------- */
+body { margin:0; background:#0A0D14; color:#F2F0EA; font-family:var(--font); }
+.shell { display:grid; grid-template-columns: 244px minmax(0,1fr); min-height:100vh; }
+@media (max-width: 900px){ .shell{ grid-template-columns:1fr; } }
+
+.rail { border-right:1px solid #222B3A; padding:20px 0 60px; background:#0C1018; position:sticky; top:0; height:100vh; overflow-y:auto; }
+@media (max-width:900px){ .rail{ position:static; height:auto; border-right:0; border-bottom:1px solid #222B3A; } }
+.rail h1 { font-variation-settings:'wdth' 125,'wght' 800; font-size:15px; margin:0 20px 2px; letter-spacing:-.01em; }
+.rail .v { font-variation-settings:'wdth' 62,'wght' 600; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#6E7A8C; margin:0 20px 18px; }
+.grp { font-variation-settings:'wdth' 62,'wght' 600; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#6E7A8C; margin:18px 20px 6px; }
+.nav { display:block; width:100%; text-align:left; background:none; border:0; color:#AEB8C6; font:inherit; font-size:13px; padding:7px 20px; cursor:pointer; border-left:2px solid transparent; }
+.nav:hover { color:#F2F0EA; background:#111722; }
+.nav[aria-current="true"] { color:#F2F0EA; background:#141B27; border-left-color:var(--accent); font-weight:700; }
+.nav:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+
+.main { padding:22px 26px 80px; max-width:1180px; }
+.hdr { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:18px; }
+.hdr h2 { font-variation-settings:'wdth' 125,'wght' 800; font-size:24px; margin:0 0 4px; letter-spacing:-.015em; }
+.hdr p { margin:0; color:#8D98A8; font-size:13.5px; max-width:60ch; }
+.toggles { display:flex; gap:6px; }
+.tg { background:transparent; border:1px solid #2B3546; color:#AEB8C6; border-radius:8px; padding:6px 11px; font:inherit; font-size:11.5px; cursor:pointer; }
+.tg[aria-pressed="true"]{ background:#F2F0EA; color:#10151F; border-color:#F2F0EA; font-weight:700; }
+
+/* ---------- device frames ---------- */
+.frames { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+.cap { font-variation-settings:'wdth' 62,'wght' 600; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#6E7A8C; margin-bottom:8px; }
+.phone { width:330px; border:1px solid #2B3546; border-radius:26px; padding:9px; background:#161B25; }
+.phone .inner { border-radius:19px; overflow:hidden; min-height:600px; display:flex; flex-direction:column; background:var(--bg); }
+.bigscreen { width:100%; max-width:880px; aspect-ratio:16/9; border:1px solid #2B3546; border-radius:8px; overflow:hidden; container-type:inline-size; }
+.bigscreen.far { max-width:260px; }
+.console { width:100%; max-width:880px; border:1px solid #2B3546; border-radius:8px; overflow:hidden; background:var(--bg); }
+
+/* content areas inherit theme tokens */
+.pbody { padding:16px; flex:1; display:flex; flex-direction:column; background:linear-gradient(168deg, var(--bg), var(--bg2)); }
+.cbody { padding:16px; background:linear-gradient(168deg, var(--bg), var(--bg2)); }
+.sbody { width:100%; height:100%; padding:4.5%; position:relative; display:flex; flex-direction:column;
+         background:linear-gradient(135deg, var(--bg), var(--bg2)); color:var(--text); }
+
+/* big screen type, container-relative */
+.s-eyebrow { font-variation-settings:'wdth' 62,'wght' 700; font-size:2.1cqw; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
+.s-prompt  { font-variation-settings:'wdth' 125,'wght' 800; font-size:4.8cqw; line-height:1.12; letter-spacing:-.015em; margin:1.6cqw 0 0; }
+.s-prompt.big { font-size:6.4cqw; }
+.s-opts { display:grid; grid-template-columns:1fr 1fr; gap:1.3cqw; margin-top:2cqw; }
+.s-opt { display:flex; align-items:center; gap:1.2cqw; background:var(--surface); border:1px solid var(--border);
+         border-radius:.9cqw; padding:1.4cqw 1.6cqw; font-size:2.9cqw; font-weight:600; }
+.s-opt .c { width:3.4cqw; height:3.4cqw; flex:none; display:grid; place-items:center; border-radius:50%;
+            border:1px solid var(--border); background:var(--bg); font-variation-settings:'wdth' 62,'wght' 700; font-size:1.8cqw; color:var(--text-muted); }
+.s-foot { position:absolute; left:0; right:0; bottom:0; height:7.5cqw; background:var(--surface); border-top:1px solid var(--border);
+          display:flex; align-items:center; justify-content:space-between; padding:0 4.5%; color:var(--text-muted); font-size:1.9cqw; }
+.s-logo { position:absolute; top:3.2%; right:3.4%; height:5cqw; aspect-ratio:2.4/1; border-radius:.5cqw; background:var(--surface);
+          border:1px solid var(--border); display:grid; place-items:center; color:var(--text-muted);
+          font-variation-settings:'wdth' 62,'wght' 700; font-size:1.5cqw; letter-spacing:.14em; }
+.s-tally { display:grid; grid-template-columns:repeat(15,1fr); gap:.5cqw; margin-top:auto; }
+.s-tally .t { aspect-ratio:1/1.15; border-radius:.35cqw; border:1px solid var(--border); }
+.s-tally .t.in { background:var(--accent); border-color:var(--accent); }
+
+/* foundations */
+.swatches { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.sw { border:1px solid var(--border); border-radius:var(--r-tile); overflow:hidden; background:var(--surface); }
+.sw .chip2 { height:56px; }
+.sw .meta { padding:8px 10px; }
+.sw code { font-size:11px; color:var(--text-muted); }
+.specimen { border:1px solid var(--border); border-radius:var(--r-tile); padding:16px; background:var(--surface); }
+.gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+.gcard { border:1px solid var(--border); border-radius:var(--r-tile); padding:14px; background:var(--surface); }
+.note { color:var(--text-muted); font-size:12.5px; margin-top:8px; }
+.themed { background:linear-gradient(168deg,var(--bg),var(--bg2)); border:1px solid var(--border); border-radius:12px; padding:18px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <h1>Trivia night</h1>
+    <div class="v">Design system · v1</div>
+    <nav id="nav"></nav>
+  </aside>
+  <main class="main tn">
+    <div class="hdr">
+      <div><h2 id="title"></h2><p id="blurb"></p></div>
+      <div class="toggles">
+        <button class="tg" id="tTheme" aria-pressed="false">Light theme</button>
+        <button class="tg" id="tFar" aria-pressed="false">Back of room</button>
+      </div>
+    </div>
+    <div id="stage"></div>
+  </main>
+</div>
+
+<script>
+/* ============================ helpers ============================ */
+const tally = (n, opts={}) => `<div class="${opts.big?'s-tally':'tally'}">${
+  Array.from({length:30},(_,i)=>{
+    const t=i+1, cls=[];
+    if(i<n) cls.push('in');
+    if(opts.out && opts.out.includes(t)) cls.push('out');
+    if(opts.us===t) cls.push('us');
+    return `<div class="t ${cls.join(' ')}">${opts.big?'':t}</div>`;
+  }).join('')}</div>`;
+
+const vitals = o => `<div class="vitals">${
+  [['Event',o.event||'Winter Quiz'],['Round',o.round||'1 of 3'],['Question',o.q||'4 of 10'],
+   ['Marking',o.mark||'1 of 3'],['Tables',o.tables||'30 live'],['Time',o.time||'20:42']]
+  .map(([k,v])=>`<div class="vital"><span class="k">${k}</span><span class="v ${o.alert===k?'alert':''}">${v}</span></div>`).join('')}</div>`;
+
+const band = (name='The Quizzards', no='Table 12', col='#C2410C', c2=null) =>
+  `<div class="band" style="background:${c2?`linear-gradient(135deg,${col},${c2})`:col};color:#fff">
+     <span>${name}</span><span class="table-no num">${no}</span></div>`;
+
+const opt = (letter, text, seated=false, mark='') =>
+  `<button class="tile ${seated?'seated':''}"><span class="chip">${letter}</span><span>${text}</span>${mark?`<span class="mark">${mark}</span>`:''}</button>`;
+
+const phone = inner => `<div><div class="cap">Player · phone</div><div class="phone"><div class="inner">${inner}</div></div></div>`;
+const big = inner => `<div style="flex:1;min-width:300px"><div class="cap">Big screen · 16:9</div><div class="bigscreen" id="bs"><div class="sbody">${inner}</div></div></div>`;
+const con = inner => `<div style="flex:1;min-width:300px"><div class="cap">Operator console</div><div class="console">${inner}</div></div>`;
+
+const foot = `<div class="s-foot"><span>Proudly supported by The Anchor</span><span>#winterquiz</span></div>`;
+const logo = `<div class="s-logo">LOGO</div>`;
+
+/* ============================ screens ============================ */
+const S = {};
+
+/* ---------- foundations ---------- */
+S.foundations = { group:'Foundations', label:'Tokens', title:'Tokens',
+  blurb:'Themes may override the nine theme tokens and nothing else. Everything below derives from them, so a round theme recolours every surface without touching a component.',
+  render: () => `
+  <div class="stack">
+    <div class="label">Theme tokens — the only overridable values</div>
+    <div class="swatches">
+      ${[['--bg','Page'],['--bg2','Gradient end'],['--surface','Tiles, inputs'],['--surface-selected','Seated tile'],
+         ['--text','Body'],['--text-muted','Secondary'],['--border','Outlines'],['--accent','Actions, eyebrows'],['--accent-text','On accent']]
+        .map(([v,use])=>`<div class="sw"><div class="chip2" style="background:var(${v})"></div>
+          <div class="meta"><div style="font-size:12.5px;font-weight:600">${use}</div><code>${v}</code></div></div>`).join('')}
+    </div>
+    <hr class="rule">
+    <div class="label">Semantic — derived, never themed directly</div>
+    <div class="swatches">
+      ${[['--correct','Correct'],['--wrong','Wrong'],['--pending','Unanswered']]
+        .map(([v,use])=>`<div class="sw"><div class="chip2" style="background:var(${v})"></div>
+          <div class="meta"><div style="font-size:12.5px;font-weight:600">${use}</div><code>${v}</code></div></div>`).join('')}
+    </div>
+    <div class="note">Status is never colour alone. A filled circle means correct, a rotated square means wrong, an outline means unanswered — and each carries a word.</div>
+    <div class="gcard" style="max-width:420px">
+      <span class="status ok">Correct</span> &nbsp;
+      <span class="status bad">Wrong</span> &nbsp;
+      <span class="status wait">Waiting</span>
+    </div>
+  </div>`
+};
+
+S.type = { group:'Foundations', label:'Type', title:'Type — width encodes role',
+  blurb:'One family, Archivo variable. Narrow uppercase for labels and metadata, normal for body and prompts, expanded black for display and numbers. The width axis does the work a second typeface usually does.',
+  render: () => `
+  <div class="stack">
+    <div class="specimen">
+      <div class="label">Round 2 · Question 7 · 2 points</div>
+      <div class="display" style="font-size:39px;margin:10px 0 4px">Who wrote Great Expectations?</div>
+      <div style="font-size:16px;max-width:56ch">Body copy sits at normal width and 16px minimum on a phone. Anything smaller invites iOS to zoom the viewport on input focus, and the room is dark.</div>
+      <div class="display num" style="font-size:60px;margin-top:14px">26 / 30</div>
+    </div>
+    <div class="gallery">
+      <div class="gcard"><div class="label">wdth 62 · label</div><div class="note">Eyebrows, table numbers, vitals keys, status. Uppercase, tracked .14em.</div></div>
+      <div class="gcard"><div class="label">wdth 100 · body</div><div class="note">Prompts, options, instructions. Never below 16px on a phone.</div></div>
+      <div class="gcard"><div class="label">wdth 125 · display</div><div class="note">Big screen prompts, scores, positions. Weight 800, tight tracking.</div></div>
+    </div>
+    <div class="notice">Ship a system font stack as the default and load Archivo with <code>font-display: swap</code>. On a bad venue connection a blocking webfont means a blank question.</div>
+  </div>`
+};
+
+S.components = { group:'Foundations', label:'Components', title:'Components',
+  blurb:'The tile is the signature. Answer options, leaderboard rows, marking queue rows and the table tally are all tiles on a board — the vernacular of a scoreboard rather than a form.',
+  render: () => `
+  <div class="gallery">
+    <div class="gcard themed">
+      <div class="label" style="margin-bottom:10px">Option tile — default and seated</div>
+      ${opt('A','Melbourne')}${opt('B','Sydney',true)}
+      <div class="note">Seated uses inset shadow, heavier border, bolder weight and an inverted chip. Four signals, none of them colour.</div>
+    </div>
+    <div class="gcard themed">
+      <div class="label" style="margin-bottom:10px">Buttons</div>
+      <div class="stack">
+        <button class="btn wide">Submit answer</button>
+        <button class="btn ghost wide">Take over as captain</button>
+        <button class="btn danger wide">Move table to paper</button>
+        <button class="btn wide" disabled>Reveal answer<kbd>R</kbd></button>
+      </div>
+    </div>
+    <div class="gcard themed">
+      <div class="label" style="margin-bottom:10px">Input</div>
+      <input class="field" placeholder="Type your answer" aria-label="Answer">
+      <div class="note">44px minimum, 16px text, focus ring in accent at 3px.</div>
+    </div>
+    <div class="gcard themed">
+      <div class="label" style="margin-bottom:10px">Table tally</div>
+      ${tally(23,{us:12,out:[14,21]})}
+      <div class="note">The one live thing in the room. Filled means answered, outlined red means a table in trouble, ringed is yours.</div>
+    </div>
+    <div class="gcard themed">
+      <div class="label" style="margin-bottom:10px">Leaderboard rows</div>
+      <div class="lb">
+        <div class="lb-row lead"><span class="pos num">1</span><span class="swatch" style="background:#1D4ED8"></span><span class="name">Quizteama Aguilera</span><span class="score num">17</span></div>
+        <div class="lb-row"><span class="pos num">2</span><span class="swatch" style="background:#C2410C"></span><span class="name">The Quizzards</span><span class="score num">16</span></div>
+      </div>
+      <div class="note">Team colour is a fixed swatch, never a row background — otherwise contrast becomes 30 separate problems.</div>
+    </div>
+    <div class="gcard themed">
+      <div class="label" style="margin-bottom:10px">Notices</div>
+      <div class="stack">
+        <div class="notice">Answer submitted — Sydney, 20:42</div>
+        <div class="notice bad">The question closed before your answer arrived.</div>
+        <div class="notice ok">Bonus +1 — best heckle of the round</div>
+      </div>
+    </div>
+  </div>`
+};
+
+/* ---------- player ---------- */
+const P = (name,title,blurb,inner) => S[name]={group:'Player',label:title.split('—')[0].trim(),title,blurb,render:()=>`<div class="frames">${phone(inner)}</div>`};
+
+P('pGate','Gate — passphrase','The first thing 240 people see, in a dark room, having just scanned a code. One field, one instruction, nothing else.',
+  `${band('Table 12','Scan accepted','#2E3A4C')}
+   <div class="pbody">
+     <div class="label">Winter Quiz</div>
+     <div class="display" style="font-size:27px;margin:8px 0 6px">You're at table 12</div>
+     <p class="muted" style="margin:0 0 18px;font-size:15px">Enter the passphrase from the big screen.</p>
+     <input class="field" placeholder="two words" autocapitalize="off" autocorrect="off" aria-label="Passphrase">
+     <div style="height:10px"></div>
+     <button class="btn wide">Join the quiz</button>
+     <div class="note" style="margin-top:auto">Ask any staff member if you can't read the screen.</div>
+   </div>`);
+
+P('pName','Pick name — returning device','Names live on the table, not the device. Anyone can pick any name — acceptable for trivia, and it is what makes a dead phone recoverable.',
+  `${band()}
+   <div class="pbody">
+     <div class="label">Who's on this phone?</div>
+     <div class="display" style="font-size:23px;margin:8px 0 14px">Pick your name</div>
+     <div class="stack">
+       ${opt('D','Dave',false,'<span class="label">Captain</span>')}
+       ${opt('P','Priya',true)}
+       ${opt('M','Marcus')}
+       <button class="tile" style="border-style:dashed"><span class="chip">+</span><span class="muted">Add your name</span></button>
+     </div>
+     <div class="note" style="margin-top:auto">Remembered on this phone. Scanning again skips this step.</div>
+   </div>`);
+
+P('pTeam','Name the team — captain only','Only the captain sees this. A committee at the table is exactly what the captain model exists to avoid.',
+  `${band('Table 12','Dave · captain')}
+   <div class="pbody">
+     <div class="label">You're the captain</div>
+     <div class="display" style="font-size:25px;margin:8px 0 6px">Name your team</div>
+     <p class="muted" style="margin:0 0 14px;font-size:15px">It goes on the big screen. Keep it clean.</p>
+     <input class="field" value="The Quizzards" aria-label="Team name">
+     <div class="note" style="margin:8px 0 14px">24 characters left</div>
+     <button class="btn wide">Save team name</button>
+     <div style="height:8px"></div>
+     <button class="btn ghost wide">Stay as Table 12</button>
+     <div class="note" style="margin-top:auto">Locks when round 1 starts.</div>
+   </div>`);
+
+P('pWait','Waiting','Deliberately empty. The phone should not compete with the room between questions.',
+  `${band()}
+   <div class="pbody">
+     <div class="label">Round 1</div>
+     <div style="flex:1;display:grid;place-items:center;text-align:center">
+       <div>
+         <div class="display" style="font-size:26px">Question 4 coming up</div>
+         <p class="muted" style="font-size:15px;margin-top:6px">Eyes on the screen.</p>
+       </div>
+     </div>
+     <hr class="rule">
+     <div style="display:flex;justify-content:space-between" class="label"><span>Answered 3 of 10</span><span class="num">Score 5</span></div>
+   </div>`);
+
+P('pMcq','Question — captain, multiple choice','The captain answers. Confirmation is explicit and timestamped so the table can see it landed without leaning over.',
+  `${band('The Quizzards','Table 12 · Dave')}
+   <div class="pbody">
+     <div style="display:flex;justify-content:space-between;align-items:baseline">
+       <span class="label">Round 1 · Q4</span><span class="label">1 point</span>
+     </div>
+     <div class="display" style="font-size:23px;margin:10px 0 16px">Which Australian city hosted the 2000 Olympics?</div>
+     <div class="stack">
+       ${opt('A','Melbourne')}${opt('B','Sydney',true)}${opt('C','Brisbane')}${opt('D','Perth')}
+     </div>
+     <div class="notice" style="margin-top:16px">Answer submitted — <strong>Sydney</strong>, 20:42</div>
+     <div class="note">Tap another option to change it until the host closes.</div>
+   </div>`);
+
+P('pFollow','Question — following along','Options are shown but are not controls: absent rather than disabled, with the reason stated. Takeover sits in the main flow because a captain who wanders off is the one real weakness of this model.',
+  `${band('The Quizzards','Table 12 · Marcus','#C2410C')}
+   <div class="pbody">
+     <div style="display:flex;justify-content:space-between;align-items:baseline">
+       <span class="label">Round 1 · Q4</span><span class="label">1 point</span>
+     </div>
+     <div class="display" style="font-size:23px;margin:10px 0 16px">Which Australian city hosted the 2000 Olympics?</div>
+     <div class="stack">
+       <div class="tile flat"><span class="chip">A</span><span>Melbourne</span></div>
+       <div class="tile flat seated"><span class="chip">B</span><span>Sydney</span><span class="mark status ok">Chosen</span></div>
+       <div class="tile flat"><span class="chip">C</span><span>Brisbane</span></div>
+       <div class="tile flat"><span class="chip">D</span><span>Perth</span></div>
+     </div>
+     <div class="notice" style="margin-top:16px"><strong>Dave</strong> is answering for your table.</div>
+     <div style="height:10px"></div>
+     <button class="btn ghost wide">Take over as captain</button>
+     <div class="note">Use this if Dave's phone dies.</div>
+   </div>`);
+
+P('pText','Question — free text','Same confirmation pattern as multiple choice. One pattern, learned once.',
+  `${band('The Quizzards','Table 12 · Dave')}
+   <div class="pbody">
+     <div style="display:flex;justify-content:space-between;align-items:baseline">
+       <span class="label">Round 1 · Q7</span><span class="label">2 points</span>
+     </div>
+     <div class="display" style="font-size:23px;margin:10px 0 16px">Who wrote Great Expectations?</div>
+     <input class="field" value="Dickens" aria-label="Answer">
+     <div style="height:10px"></div>
+     <button class="btn wide">Update answer</button>
+     <div class="notice" style="margin-top:16px">Answer submitted — <strong>Dickens</strong>, 20:51</div>
+     <div class="note" style="margin-top:auto">Spelling is judged generously.</div>
+   </div>`);
+
+P('pImage','Question — image layout','Images go to phones as well as the projector. Someone at the back who cannot read the screen can pinch to zoom here.',
+  `${band('The Quizzards','Table 12 · Dave')}
+   <div class="pbody">
+     <div style="display:flex;justify-content:space-between;align-items:baseline">
+       <span class="label">Round 2 · Q3</span><span class="label">2 points</span>
+     </div>
+     <div class="display" style="font-size:23px;margin:10px 0 12px">Which building is this?</div>
+     <div style="aspect-ratio:4/3;border-radius:var(--r-tile);border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;color:var(--text-muted);font-size:12px;margin-bottom:12px">
+       A white building with overlapping curved shell roofs
+     </div>
+     <div class="stack">${opt('A','Flinders Street')}${opt('B','Opera House')}${opt('C','Parliament House')}${opt('D','MCG')}</div>
+   </div>`);
+
+P('pRevealed','Revealed — result','Free text can be revealed while still unmarked. The room hears the answer; the table\'s own result waits for the round.',
+  `${band('The Quizzards','Table 12 · Dave')}
+   <div class="pbody">
+     <div style="display:flex;justify-content:space-between;align-items:baseline">
+       <span class="label">Round 1 · Q7</span><span class="label">Closed</span>
+     </div>
+     <div class="display" style="font-size:23px;margin:10px 0 14px">Who wrote Great Expectations?</div>
+     <div class="tile flat seated"><span class="chip">✓</span><span>Charles Dickens</span></div>
+     <div class="note">Your answer: Dickens</div>
+     <div style="margin:14px 0"><span class="status ok">Correct · +2</span></div>
+     <hr class="rule">
+     <div class="label">Watch it again</div>
+     <div style="aspect-ratio:16/9;border-radius:var(--r-tile);border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;color:var(--text-muted);font-size:13px;margin-top:8px">▶ Muted by default</div>
+   </div>`);
+
+P('pPaused','Paused','The question is hidden, not greyed — otherwise people read ahead while the room does something else. A half-typed answer survives.',
+  `${band()}
+   <div class="pbody">
+     <div class="label">Round 1 · paused</div>
+     <div style="flex:1;display:grid;place-items:center;text-align:center">
+       <div>
+         <div class="display" style="font-size:28px">Back in five minutes</div>
+         <p class="muted" style="font-size:15px;margin-top:8px">Mains are coming out.</p>
+         <div style="margin-top:16px"><span class="status wait">Paused 2:14</span></div>
+       </div>
+     </div>
+     <div class="note">Your answer is saved.</div>
+   </div>`);
+
+P('pBreak','Round break','Doubles as the marking window. The room reads the board while free text is judged.',
+  `${band()}
+   <div class="pbody">
+     <div class="label">Round 1 complete</div>
+     <div class="display num" style="font-size:44px;margin:6px 0 2px">7 / 10</div>
+     <div class="note" style="margin-bottom:16px">Two questions still being marked.</div>
+     <div class="lb">
+       <div class="lb-row lead"><span class="pos num">1</span><span class="swatch" style="background:#1D4ED8"></span><span class="name">Quizteama Aguilera</span><span class="score num">9</span></div>
+       <div class="lb-row"><span class="pos num">2</span><span class="swatch" style="background:#15803D"></span><span class="name">Table 4</span><span class="score num">8</span></div>
+       <div class="lb-row"><span class="pos num">3</span><span class="swatch" style="background:#C2410C"></span><span class="name">The Quizzards</span><span class="score num">7</span></div>
+     </div>
+     <div class="note" style="margin-top:auto">Round 2 starts shortly.</div>
+   </div>`);
+
+/* ---------- big screen ---------- */
+const B = (name,title,blurb,inner) => S[name]={group:'Big screen',label:title.split('—')[0].trim(),title,blurb,render:()=>`<div class="frames">${big(inner)}</div>`};
+
+B('bJoin','Doors open','Codes live on the tables. Projecting one shared code would collapse team identity entirely.',
+  `${logo}
+   <div class="s-eyebrow">Winter Quiz</div>
+   <div class="s-prompt big" style="margin-top:2cqw">Scan the code<br>on your table</div>
+   <div style="margin-top:2.4cqw;font-size:2.4cqw;color:var(--text-muted)">Passphrase: <strong style="color:var(--text)">purple otter</strong></div>
+   ${foot}`);
+
+B('bLive','Question live','Prompt at 4.8cqw, options as tiles. The tally along the bottom is the only live element and it answers the host\'s one question: wait, or move on.',
+  `${logo}
+   <div style="display:flex;justify-content:space-between;align-items:baseline">
+     <span class="s-eyebrow">Round 1 · Q4 · 1 point</span>
+     <span class="s-eyebrow num">23 / 30 answered</span>
+   </div>
+   <div class="s-prompt">Which Australian city hosted the 2000 Olympics?</div>
+   <div class="s-opts">
+     <div class="s-opt"><span class="c">A</span>Melbourne</div>
+     <div class="s-opt"><span class="c">B</span>Sydney</div>
+     <div class="s-opt"><span class="c">C</span>Brisbane</div>
+     <div class="s-opt"><span class="c">D</span>Perth</div>
+   </div>
+   <div style="margin-top:auto;margin-bottom:8.5cqw">${tally(23,{big:true})}</div>
+   ${foot}`);
+
+B('bStatement','Statement layout','Reserved for the final question. Prompt only, at maximum size, no options — the moment the room goes quiet.',
+  `${logo}
+   <div class="s-eyebrow">Round 3 · Q10 · 5 points</div>
+   <div style="flex:1;display:flex;align-items:center">
+     <div class="s-prompt big" style="margin:0">Who is the only person to win an Oscar, an Emmy, a Grammy, a Tony and a Nobel Prize?</div>
+   </div>
+   ${foot}`);
+
+B('bSpread','Closed — answer spread','The host\'s material. "Three of you fancied Melbourne" is the line that gets a laugh, and it costs nothing to surface.',
+  `${logo}
+   <div class="s-eyebrow">Round 1 · Q4 · closed</div>
+   <div class="s-prompt" style="font-size:3.6cqw">Which Australian city hosted the 2000 Olympics?</div>
+   <div class="s-opts" style="grid-template-columns:1fr">
+     <div class="s-opt" style="border-color:var(--accent);border-width:2px"><span class="c">B</span>Sydney
+       <span style="margin-left:auto;font-variation-settings:'wdth' 125,'wght' 800">26</span></div>
+     <div class="s-opt"><span class="c">A</span>Melbourne<span style="margin-left:auto;color:var(--text-muted)">3</span></div>
+     <div class="s-opt"><span class="c">C</span>Brisbane<span style="margin-left:auto;color:var(--text-muted)">1</span></div>
+   </div>
+   ${foot}`);
+
+B('bBoard','Leaderboard','Top five only. Nobody wants their table read out last in front of the room.',
+  `${logo}
+   <div class="s-eyebrow">After round 2</div>
+   <div class="s-prompt" style="font-size:4cqw;margin-bottom:1.6cqw">Leaderboard</div>
+   <div style="display:flex;flex-direction:column;gap:.7cqw">
+     ${[['1','Quizteama Aguilera','17','#1D4ED8',true],['2','The Quizzards','16','#C2410C'],['3','Table 4','16','#15803D'],['4','The Quizzards of Oz','14','#7C3AED'],['5','Table 18','13','#0F766E']]
+       .map(([p,n,s,c,lead])=>`<div class="s-opt" style="${lead?'border-color:var(--accent);border-width:2px':''}">
+         <span style="font-variation-settings:'wdth' 125,'wght' 800;min-width:2.6cqw;color:${lead?'var(--accent)':'var(--text-muted)'}">${p}</span>
+         <span style="width:.7cqw;align-self:stretch;border-radius:.3cqw;background:${c}"></span>
+         <span>${n}</span>
+         <span style="margin-left:auto;font-variation-settings:'wdth' 125,'wght' 800">${s}</span></div>`).join('')}
+   </div>
+   ${foot}`);
+
+B('bPaused','Paused','Same message the host typed, at full size. The room needs to know this is deliberate.',
+  `${logo}
+   <div class="s-eyebrow">Paused</div>
+   <div style="flex:1;display:flex;align-items:center">
+     <div><div class="s-prompt big" style="margin:0">Back in five minutes</div>
+     <div style="font-size:2.6cqw;color:var(--text-muted);margin-top:1.6cqw">Mains are coming out.</div></div>
+   </div>
+   ${foot}`);
+
+/* ---------- host ---------- */
+const H = (name,group,title,blurb,inner) => S[name]={group,label:title.split('—')[0].trim(),title,blurb,render:()=>`<div class="frames">${con(inner)}</div>`};
+
+H('hPreflight','Host console','Pre-flight','Twelve unscanned tables at 19:41 means walking the room, not starting the quiz. Seats make it a ratio rather than a bare count.',
+  `${vitals({round:'Not started',q:'—',mark:'—',tables:'18 / 30',time:'19:41',alert:'Tables'})}
+   <div class="cbody">
+     <div class="label">Before doors</div>
+     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:12px">
+       <div class="stack">
+         <div class="tile flat"><span>Question set</span><span class="mark status ok">30 loaded</span></div>
+         <div class="tile flat"><span>AV cues matched</span><span class="mark status ok">6 of 6</span></div>
+         <div class="tile flat"><span>Themes validated</span><span class="mark status ok">30 pass</span></div>
+         <div class="tile flat"><span>Tables checked in</span><span class="mark status wait">18 of 30</span></div>
+       </div>
+       <div>
+         <div class="label" style="margin-bottom:8px">Room</div>
+         ${tally(18,{out:[3,14]})}
+         <div class="note">Not yet scanned: 3, 7, 9, 14, 16, 19, 21, 24, 25, 27, 28, 30</div>
+       </div>
+     </div>
+     <hr class="rule">
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <button class="btn ghost">Send the practice question</button>
+       <button class="btn">Start round 1<kbd>↵</kbd></button>
+     </div>
+   </div>`);
+
+H('hOpen','Host console','Question open','The correct answer stays in front of the host permanently — you are reading it aloud, not remembering it. Keyboard first: a clicker runs the whole night.',
+  `${vitals({})}
+   <div class="cbody">
+     <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:20px">
+       <div>
+         <div style="display:flex;justify-content:space-between"><span class="label">Round 1 · Q4 · multiple choice · 1 pt</span><span class="status wait">Open 1:12</span></div>
+         <div class="display" style="font-size:23px;margin:10px 0 8px">Which Australian city hosted the 2000 Olympics?</div>
+         <div class="notice">Answer: <strong>Sydney</strong> · options A Melbourne / B Sydney / C Brisbane / D Perth</div>
+         <div class="note">Say: "No conferring with the next table." Then pause five seconds.</div>
+         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+           <button class="btn ghost sm">Close<kbd>C</kbd></button>
+           <button class="btn sm" disabled>Reveal<kbd>R</kbd></button>
+           <button class="btn sm" disabled>Next<kbd>␣</kbd></button>
+           <button class="btn ghost sm">Bonus<kbd>B</kbd></button>
+           <button class="btn ghost sm">Pause<kbd>P</kbd></button>
+         </div>
+       </div>
+       <div>
+         <div style="display:flex;justify-content:space-between"><span class="label">Tables answered</span><span class="label num">23 / 30</span></div>
+         <div style="margin-top:8px">${tally(23,{out:[14,21]})}</div>
+         <div class="note">Outstanding: 3, 9, 14, 21, 25, 28, 30</div>
+         <hr class="rule">
+         <div class="label">Up next</div>
+         <div class="tile flat" style="margin-top:8px"><span>Q5 · free text · Great Expectations</span></div>
+       </div>
+     </div>
+   </div>`);
+
+H('hPaused','Host console','Paused','Marking, floor and admin keep working through a pause. That is the point — "pause while marking catches up" is one of the two reasons to press it.',
+  `${vitals({q:'4 of 10 · paused',time:'20:47'})}
+   <div class="cbody">
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+       <div>
+         <div class="label">Paused 2:14</div>
+         <div class="display" style="font-size:23px;margin:8px 0 12px">Room is paused</div>
+         <div class="notice">On screen: "Back in five minutes — mains are coming out."</div>
+         <div class="label" style="margin-top:14px">Reason</div>
+         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+           <button class="btn sm">Food service</button>
+           <button class="btn ghost sm">Speech</button>
+           <button class="btn ghost sm">Marking</button>
+           <button class="btn ghost sm">Technical</button>
+         </div>
+         <div style="margin-top:16px"><button class="btn">Resume<kbd>P</kbd></button></div>
+       </div>
+       <div class="stack">
+         <div class="label">Still running</div>
+         <div class="tile flat"><span>Marking</span><span class="mark status ok">Active</span></div>
+         <div class="tile flat"><span>Floor support</span><span class="mark status ok">Active</span></div>
+         <div class="label" style="margin-top:6px">Frozen</div>
+         <div class="tile flat"><span>Player answers</span><span class="mark status bad">Rejected</span></div>
+         <div class="tile flat"><span>Timer</span><span class="mark status wait">0:48</span></div>
+       </div>
+     </div>
+   </div>`);
+
+H('hTrouble','Host console','Table support','Something will go wrong. This screen is the difference between a hiccup and a stall.',
+  `${vitals({q:'7 of 10',tables:'29 live',time:'21:19',alert:'Tables'})}
+   <div class="cbody">
+     <div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:20px">
+       <div>
+         <div class="label">Table 14 · The Quizzards of Oz</div>
+         <div class="notice bad" style="margin-top:8px">Last seen 11 minutes ago · 0 answers this round</div>
+         <div class="tile flat" style="margin-top:8px"><span>Captain</span><span class="mark">Ash</span></div>
+         <div class="tile flat"><span>Seats</span><span class="mark num">6 · 3 joined</span></div>
+         <div class="stack" style="margin-top:14px">
+           <button class="btn ghost wide">Show their code and passphrase</button>
+           <button class="btn ghost wide">Enter an answer for this table</button>
+           <button class="btn danger wide">Move table to paper</button>
+         </div>
+       </div>
+       <div>
+         <div class="label">All tables</div>
+         <div style="margin-top:8px">${tally(29,{out:[14]})}</div>
+         <hr class="rule">
+         <div class="label">Open issues</div>
+         <div class="stack" style="margin-top:8px">
+           <div class="notice bad">Table 14 — dropped off, 11 min</div>
+           <div class="notice ok">Table 6 — disputed Q5, resolved</div>
+         </div>
+       </div>
+     </div>
+   </div>`);
+
+H('hFinal','Host console','Final','Every phone is open at this moment. It is the one time the room will all look down at once.',
+  `${vitals({round:'3 of 3',q:'10 of 10',mark:'3 of 3',time:'22:34'})}
+   <div class="cbody">
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+       <div>
+         <div class="label">All rounds complete · 30 questions marked</div>
+         <div class="lb" style="margin-top:10px">
+           <div class="lb-row lead"><span class="pos num">1</span><span class="swatch" style="background:#7C3AED"></span><span class="name">The Quizzards of Oz</span><span class="score num">26</span></div>
+           <div class="lb-row"><span class="pos num">2</span><span class="swatch" style="background:#1D4ED8"></span><span class="name">Quizteama Aguilera</span><span class="score num">25</span></div>
+           <div class="lb-row"><span class="pos num">3</span><span class="swatch" style="background:#C2410C"></span><span class="name">The Quizzards</span><span class="score num">23</span></div>
+         </div>
+         <div class="note">Second place decided on countback — round 3.</div>
+       </div>
+       <div class="stack">
+         <button class="btn wide">Reveal the winner</button>
+         <button class="btn ghost wide">Send the video playlist to all tables</button>
+         <button class="btn ghost wide">Export results</button>
+         <div class="notice">Export gives a per-table, per-question sheet for anyone who asks.</div>
+       </div>
+     </div>
+   </div>`);
+
+/* ---------- marker ---------- */
+H('mQueue','Marker','Queue','The queue fills as questions close and is worked during play. Auto-matched counts up front tell you the job is small before you open it.',
+  `${vitals({q:'7 of 10 · live',mark:'1 of 3',alert:'Marking',time:'20:56'})}
+   <div class="cbody">
+     <div style="display:flex;justify-content:space-between"><span class="label">Marking queue · round 1</span><span class="label">Sam</span></div>
+     <div class="display" style="font-size:21px;margin:10px 0 12px">Two questions ready</div>
+     <div class="stack">
+       <button class="tile"><span>1.2 · Who wrote Great Expectations?</span><span class="mark status wait">26 auto · 4 to judge</span></button>
+       <button class="tile"><span>1.5 · Which river runs through Cairo?</span><span class="mark status wait">29 auto · 1 to judge</span></button>
+       <div class="tile flat" style="opacity:.5"><span>1.9 · Name the film this score is from</span><span class="mark label">Not closed</span></div>
+     </div>
+     <div class="notice" style="margin-top:14px">Round 1 cannot publish until these are marked.</div>
+     <div style="margin-top:12px"><button class="btn">Start marking 1.2<kbd>↵</kbd></button></div>
+   </div>`);
+
+H('mMark','Marker','Marking','One answer at a time, large. This is done fast, and a dense list invites mis-taps.',
+  `${vitals({q:'7 of 10 · live',mark:'1 of 3',time:'20:58'})}
+   <div class="cbody">
+     <div style="display:flex;justify-content:space-between"><span class="label">1.2 · 2 points</span><span class="label">You hold this question</span></div>
+     <div class="display" style="font-size:21px;margin:10px 0 4px">Who wrote Great Expectations?</div>
+     <div class="note">Charles Dickens · also accepting dickens, c dickens</div>
+     <div class="notice" style="margin:12px 0">26 tables auto-matched and hidden</div>
+     <div class="label">4 to judge · 1 of 4</div>
+     <div class="tile flat" style="margin:8px 0 12px;flex-direction:column;align-items:flex-start;gap:4px">
+       <span class="label">Table 6 · answered 20:44</span>
+       <span class="display" style="font-size:26px">Charles Dickins</span>
+     </div>
+     <div style="display:flex;gap:10px">
+       <button class="btn wide" style="background:transparent;color:var(--correct);border-color:var(--correct)">Correct<kbd>Y</kbd></button>
+       <button class="btn wide" style="background:transparent;color:var(--wrong);border-color:var(--wrong)">Wrong<kbd>N</kbd></button>
+     </div>
+     <div style="margin-top:10px"><button class="btn ghost wide">Accept this spelling for every table<kbd>A</kbd></button></div>
+     <div class="note">Applies to all 30 and re-scores. Confirmed before it lands.</div>
+   </div>`);
+
+/* ---------- floor ---------- */
+S.fRoom={group:'Floor',label:'Room',title:'Floor — room',blurb:'Phone-shaped, for someone standing and walking. The room at a glance, then a short list of tables that actually need a visit. Correct answers appear nowhere on this surface.',
+  render:()=>`<div class="frames">${phone(`
+   ${band('Floor · Jo','Q7 open','#2E3A4C')}
+   <div class="pbody">
+     <div style="display:flex;justify-content:space-between"><span class="label">Tables</span><span class="label num">28 answering</span></div>
+     <div style="margin-top:10px">${tally(28,{out:[14,21]})}</div>
+     <hr class="rule">
+     <div class="label">Needs attention</div>
+     <div class="stack" style="margin-top:10px">
+       <button class="tile"><span class="chip">14</span><span>Offline 11 min</span><span class="mark status bad">Down</span></button>
+       <button class="tile"><span class="chip">21</span><span>No answer this round</span><span class="mark status wait">Quiet</span></button>
+       <button class="tile"><span class="chip">3</span><span>Two answers behind</span><span class="mark status wait">Quiet</span></button>
+     </div>
+   </div>`)}</div>`};
+
+S.fTable={group:'Floor',label:'Table',title:'Floor — table',blurb:'Four actions in the order you would try them. Show the code first — most problems are someone who never scanned.',
+  render:()=>`<div class="frames">${phone(`
+   ${band('The Quizzards of Oz','Table 14','#7C3AED')}
+   <div class="pbody">
+     <div class="notice bad">Last seen 11 minutes ago<br><span class="note">0 answers this round</span></div>
+     <div class="stack" style="margin-top:12px">
+       <div class="tile flat"><span>Captain</span><span class="mark">Ash</span></div>
+       <div class="tile flat"><span>Seats</span><span class="mark num">6 · 3 joined</span></div>
+     </div>
+     <hr class="rule">
+     <div class="stack">
+       <button class="btn ghost wide">Show their code and passphrase</button>
+       <button class="btn ghost wide">Enter an answer for this table</button>
+       <button class="btn ghost wide">Make someone else captain</button>
+       <button class="btn danger wide">Move table to paper</button>
+     </div>
+     <div class="note" style="margin-top:auto">Every action is logged with a reason.</div>
+   </div>`)}</div>`};
+
+/* ---------- admin ---------- */
+H('aEvents','Admin','Events','Many events configured, exactly one active. Activating names what it replaces and is blocked mid-round.',
+  `${vitals({event:'4 configured',round:'—',q:'—',mark:'—',tables:'—',time:'Admin'})}
+   <div class="cbody">
+     <div class="label">All events</div>
+     <div class="stack" style="margin-top:10px">
+       <button class="tile seated"><span>Winter Quiz · 12 Sep</span><span class="mark status ok">Active</span></button>
+       <button class="tile"><span>Staff Christmas Quiz · 14 Dec</span><span class="mark status wait">Draft</span></button>
+       <button class="tile"><span>Autumn Quiz · 3 Jun</span><span class="mark label">Finished · delete 3 Jul</span></button>
+       <button class="tile" style="opacity:.55"><span>Trial run · 2 May</span><span class="mark label">Archived</span></button>
+     </div>
+     <hr class="rule">
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <button class="btn ghost">New event</button>
+       <button class="btn ghost">Import config JSON</button>
+       <button class="btn ghost">Clone Autumn Quiz</button>
+     </div>
+     <div class="note">Cloning copies questions, aliases, settings and tables. Never answers, players or tokens.</div>
+   </div>`);
+
+H('aQuestion','Admin','Question editor','Alias editing belongs here, before the night, not in the marking queue under time pressure.',
+  `${vitals({event:'Winter Quiz',round:'—',q:'Editing 1.2',mark:'—',tables:'30',time:'Admin'})}
+   <div class="cbody">
+     <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:20px">
+       <div class="stack">
+         <div><div class="label">Question</div><input class="field" value="Who wrote Great Expectations?"></div>
+         <div><div class="label">Correct answer</div><input class="field" value="Charles Dickens"></div>
+         <div><div class="label">Also accept</div><input class="field" value="dickens · c dickens · charles dickins"></div>
+         <div class="notice">Aliases added here save marking time on the night. Add the obvious misspellings now.</div>
+       </div>
+       <div class="stack">
+         <div><div class="label">Type</div>
+           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn ghost sm">Choice</button><button class="btn sm">Free text</button></div></div>
+         <div><div class="label">Points</div>
+           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn ghost sm">1</button><button class="btn sm">2</button><button class="btn ghost sm">3</button></div></div>
+         <div><div class="label">Theme</div>
+           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm">Inherit round 1</button><button class="btn ghost sm">Override</button></div></div>
+         <div class="tile flat"><span>Image</span><span class="mark muted">None</span></div>
+         <div class="tile flat"><span>Video · unlocks at reveal</span><span class="mark muted">None</span></div>
+       </div>
+     </div>
+     <hr class="rule">
+     <div style="display:flex;gap:8px"><button class="btn ghost">Preview on phone</button><button class="btn">Save</button></div>
+   </div>`);
+
+H('aTheme','Admin','Theme','Validate the resolved theme, never the layers. A round background with an inherited accent can fail when neither fails alone.',
+  `${vitals({event:'Winter Quiz',round:'—',q:'Theme',mark:'—',tables:'30',time:'Admin'})}
+   <div class="cbody">
+     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+       <button class="btn sm">Event default</button><button class="btn ghost sm">Round 2</button><button class="btn ghost sm">Q2.7</button>
+       <span class="label" style="margin-left:auto;align-self:center">Question &gt; round &gt; default</span>
+     </div>
+     <div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:20px">
+       <div class="stack">
+         <div><div class="label">Layout</div>
+           <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+             <button class="btn sm">Standard</button><button class="btn ghost sm">Image</button>
+             <button class="btn ghost sm">Media</button><button class="btn ghost sm">Statement</button></div></div>
+         <div class="tile flat"><span>Background</span><span class="mark" style="width:44px;height:20px;border-radius:4px;background:linear-gradient(135deg,#10151F,#17202E);border:1px solid var(--border)"></span></div>
+         <div class="tile flat"><span>Accent</span><span class="mark" style="width:44px;height:20px;border-radius:4px;background:#E8A33D"></span></div>
+         <div class="notice ok">Contrast 9.2:1 · passes the 7:1 projector bar</div>
+         <div class="notice bad">2.7 and 3.4 fail at 3.9:1 — round background with the inherited accent.</div>
+         <div class="note">An event cannot activate while a resolved theme fails.</div>
+       </div>
+       <div>
+         <div class="label">Preview · back of the room</div>
+         <div class="bigscreen far" style="margin-top:8px;border-color:var(--border)">
+           <div class="sbody"><div class="s-eyebrow">Round 1 · Q4</div>
+           <div class="s-prompt">Which Australian city hosted the 2000 Olympics?</div></div>
+         </div>
+         <div class="note">If it fails here, it fails on the night.</div>
+       </div>
+     </div>
+   </div>`);
+
+/* ============================ wiring ============================ */
+const keys = Object.keys(S);
+let cur = keys[0], far = false;
+
+const nav = document.getElementById('nav');
+let lastGroup = null;
+nav.innerHTML = keys.map(k => {
+  const g = S[k].group !== lastGroup ? `<div class="grp">${S[k].group}</div>` : '';
+  lastGroup = S[k].group;
+  return g + `<button class="nav" data-k="${k}">${S[k].label}</button>`;
+}).join('');
+
+function render(){
+  const s = S[cur];
+  document.getElementById('title').textContent = s.title;
+  document.getElementById('blurb').textContent = s.blurb;
+  document.getElementById('stage').innerHTML = s.render();
+  document.querySelectorAll('.nav').forEach(b => b.setAttribute('aria-current', b.dataset.k === cur));
+  const bs = document.getElementById('bs');
+  if (bs) bs.classList.toggle('far', far);
+  document.getElementById('tFar').setAttribute('aria-pressed', far);
+}
+nav.addEventListener('click', e => {
+  const b = e.target.closest('.nav'); if(!b) return;
+  cur = b.dataset.k; render(); window.scrollTo({top:0});
+});
+document.getElementById('tTheme').addEventListener('click', e => {
+  const light = document.documentElement.dataset.theme === 'light';
+  document.documentElement.dataset.theme = light ? 'dark' : 'light';
+  e.currentTarget.setAttribute('aria-pressed', String(!light));
+  e.currentTarget.textContent = light ? 'Light theme' : 'Dark theme';
+});
+document.getElementById('tFar').addEventListener('click', () => { far = !far; render(); });
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+/* ==========================================================================
+   Component vernacular — everything on every surface is a tile on a board.
+   Do not introduce card/panel/accordion metaphors alongside these.
+   ========================================================================== */
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--tap);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-body);
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: var(--lift);
+  transition: background .12s ease, border-color .12s ease, transform .08s ease;
+}
+.tile:hover { border-color: var(--text-muted); }
+.tile:active { transform: translateY(1px); }
+.tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* seated = selected. Shape + weight + inset, never colour alone
+   (CLAUDE.md #16). Padding compensates for the thicker border so tiles
+   don't jump on selection. */
+.tile.seated {
+  background: var(--surface-selected);
+  border-color: var(--text);
+  border-width: 2px;
+  padding: calc(var(--s3) - 1px) calc(var(--s4) - 1px);
+  font-weight: 700;
+  box-shadow: var(--seat);
+  transform: translateY(1px);
+}
+.tile[disabled] { cursor: default; opacity: .62; box-shadow: none; }
+.tile.flat { box-shadow: none; cursor: default; }
+.tile.flat:hover { border-color: var(--border); }
+.tile.flat:active { transform: none; }
+
+.chip {
+  flex: none;
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 700;
+  font-size: var(--t-small);
+}
+.tile.seated .chip {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+.tile .mark { margin-left: auto; flex: none; font-size: var(--t-small); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--tap);
+  padding: 0 var(--s5);
+  border-radius: var(--r-tile);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit; font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--lift);
+  transition: transform .08s ease, filter .12s ease;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn:active { transform: translateY(1px); box-shadow: var(--seat); }
+.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn.wide { width: 100%; }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+.btn.ghost:hover { border-color: var(--text-muted); filter: none; }
+.btn.danger { background: transparent; color: var(--wrong); border-color: var(--wrong); }
+.btn[disabled] { background: var(--surface); border-color: var(--border); color: var(--text-muted); cursor: default; box-shadow: none; }
+.btn.sm { min-height: 34px; padding: 0 var(--s3); font-size: var(--t-small); }
+
+kbd {
+  font: inherit; font-size: 10px;
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 4px; padding: 1px 5px;
+  color: var(--text-muted); background: var(--bg);
+}
+
+.field {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+  color: var(--text);
+  font: inherit; font-size: var(--t-body);
+}
+.field::placeholder { color: var(--text-muted); }
+.field:focus-visible, .field:focus { outline: 3px solid var(--accent); outline-offset: 2px; border-color: var(--text); }
+
+/* Always shape + word, never colour alone (CLAUDE.md #16). */
+.status {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 700;
+  font-size: var(--t-label); letter-spacing: .1em; text-transform: uppercase;
+}
+.status::before {
+  content: ''; width: 10px; height: 10px; flex: none;
+  border: 2px solid currentColor;
+}
+.status.ok      { color: var(--correct); }
+.status.ok::before { border-radius: 50%; background: currentColor; }
+.status.bad     { color: var(--wrong); }
+.status.bad::before { transform: rotate(45deg); }
+.status.wait    { color: var(--pending); }
+.status.wait::before { border-radius: 50%; }
+
+/* Team colour band — identity, constant, never the content area
+   (CLAUDE.md #18). Phone only. */
+.band {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid rgba(0,0,0,.35);
+  font-variation-settings: 'wdth' 100, 'wght' 700;
+}
+.band .table-no {
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  font-size: var(--t-label); letter-spacing: .12em; text-transform: uppercase;
+  opacity: .88;
+}
+
+/* Operator vitals strip — always visible on operator surfaces. */
+.vitals { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--surface); }
+.vital { padding: var(--s2) var(--s4); border-right: 1px solid var(--border); flex: 1; min-width: 92px; }
+.vital .k { display: block; font-variation-settings: 'wdth' var(--w-narrow), 'wght' 600;
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+.vital .v { font-variation-settings: 'wdth' 100, 'wght' 700; font-size: var(--t-small); font-variant-numeric: tabular-nums; }
+.vital .v.alert { color: var(--accent); }
+
+/* Table tally — 30 lozenges, the one live thing in the room. */
+.tally { display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px; }
+.tally .t {
+  aspect-ratio: 1 / 1.15;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  display: grid; place-items: center;
+  font-variation-settings: 'wdth' var(--w-narrow), 'wght' 700;
+  font-size: 10px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tally .t.in { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.tally .t.out { border-color: var(--wrong); color: var(--wrong); }
+.tally .t.us { outline: 2px solid var(--text); outline-offset: 1px; }
+
+.lb { display: flex; flex-direction: column; gap: var(--s2); }
+.lb-row {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-tile);
+}
+.lb-row .pos {
+  font-variation-settings: 'wdth' var(--w-wide), 'wght' 800;
+  font-size: var(--t-lead); font-variant-numeric: tabular-nums;
+  color: var(--text-muted); min-width: 1.6em;
+}
+.lb-row.lead { border-color: var(--accent); border-width: 2px; padding: calc(var(--s3) - 1px) calc(var(--s4) - 1px); }
+.lb-row.lead .pos { color: var(--accent); }
+.lb-row .swatch { width: 8px; align-self: stretch; border-radius: 3px; flex: none; }
+.lb-row .name { flex: 1; font-weight: 600; }
+.lb-row .score {
+  font-variation-settings: 'wdth' var(--w-wide), 'wght' 800;
+  font-size: var(--t-h3); font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  font-size: var(--t-small);
+}
+.notice.bad { border-left-color: var(--wrong); }
+.notice.ok { border-left-color: var(--correct); }
+
+/* Admin theme preview — "back of the room" scale (design-handover: aTheme),
+   reusing the big screen's own eyebrow/prompt type at a small size.
+   Colours are set as inline custom properties scoped to this box, not
+   documentElement, so it can preview a resolved theme without repainting
+   the whole admin console. */
+.bigscreen-preview {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.bigscreen-preview > div {
+  width: 100%;
+  height: 100%;
+  padding: 6%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, var(--bg), var(--bg2));
+  color: var(--text);
+}
+.bigscreen-preview .s-eyebrow {
+  font-variation-settings: 'wdth' 62, 'wght' 700;
+  font-size: 2.4cqw;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.bigscreen-preview .s-prompt {
+  font-variation-settings: 'wdth' 125, 'wght' 800;
+  font-size: 5.4cqw;
+  line-height: 1.15;
+  letter-spacing: -.015em;
+  margin: 1.6cqw 0 0;
+}

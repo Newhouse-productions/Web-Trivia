@@ -107,17 +107,15 @@
     playEls = null;
     clear(app);
 
-    if (state.stage === 'no_session') {
+    if (state.stage === 'no_session' || state.stage === 'event_not_running') {
+      const pbody = document.createElement('div');
+      pbody.className = 'pbody';
       const p = document.createElement('p');
-      p.textContent = "Scan your table's QR code to join.";
-      app.appendChild(p);
-      return;
-    }
-
-    if (state.stage === 'event_not_running') {
-      const p = document.createElement('p');
-      p.textContent = "This event isn't running right now.";
-      app.appendChild(p);
+      p.textContent = state.stage === 'no_session'
+        ? "Scan your table's QR code to join."
+        : "This event isn't running right now.";
+      pbody.appendChild(p);
+      app.appendChild(pbody);
       return;
     }
 
@@ -128,43 +126,67 @@
   }
 
   function renderLeaderboard(state) {
-    const heading = document.createElement('p');
-    heading.textContent = `Table ${state.team.table_number}${state.team.team_name ? ' — ' + state.team.team_name : ''}`;
+    if (state.theme) applyTheme(state.theme);
+
+    const pbody = document.createElement('div');
+    pbody.className = 'pbody';
+    app.appendChild(pbody);
+
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'label';
+    eyebrow.textContent = `Table ${state.team.table_number}${state.team.team_name ? ' — ' + state.team.team_name : ''}`;
     const title = document.createElement('h1');
+    title.className = 'display';
+    title.style.fontSize = 'var(--t-h2)';
+    title.style.margin = '4px 0 var(--s4)';
     title.textContent = `Leaderboard — Round ${state.round}`;
-    app.append(heading, title);
+    pbody.append(eyebrow, title);
 
     if (state.our_place) {
       const place = document.createElement('p');
       place.className = 'note';
       place.textContent = `Your table: ${ordinal(state.our_place)} place`;
-      app.appendChild(place);
+      pbody.appendChild(place);
     }
 
     const list = document.createElement('div');
-    list.className = 'options';
+    list.className = 'lb';
     state.leaderboard.forEach((row, i) => {
       const line = document.createElement('div');
-      line.className = 'option' + (state.our_place === i + 1 ? ' selected' : '');
-      // Swatch beside the row, never a row background or text colour
-      // (CLAUDE.md #18, technical-design §20.4) — every other row's
-      // contrast against it would become a separate problem otherwise.
+      // .lead is rank-based (top of the board), distinct from "our table"
+      // which gets its own marker below — the old markup conflated the two
+      // via a single .selected class.
+      line.className = 'lb-row' + (i === 0 ? ' lead' : '');
+      const pos = document.createElement('span');
+      pos.className = 'pos num';
+      pos.textContent = String(i + 1);
+      line.appendChild(pos);
+      // Team colour is a fixed swatch bar, never a row background
+      // (CLAUDE.md #18, technical-design §20.4).
       const swatchCss = colourCss(row.colour);
       if (swatchCss) {
         const swatch = document.createElement('span');
-        swatch.className = 'team-swatch';
+        swatch.className = 'swatch';
         swatch.style.background = swatchCss;
         line.appendChild(swatch);
       }
-      const rank = document.createElement('span');
-      rank.textContent = `${i + 1}. ${row.team_name}`;
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = row.team_name;
+      if (state.our_place === i + 1) {
+        const us = document.createElement('span');
+        us.className = 'label';
+        us.style.marginLeft = '6px';
+        us.textContent = '(you)';
+        name.appendChild(us);
+      }
       const score = document.createElement('span');
+      score.className = 'score num';
       score.textContent = String(row.score);
-      score.style.float = 'right';
-      line.append(rank, score);
+      line.append(name, score);
       list.appendChild(line);
     });
-    app.appendChild(list);
+    pbody.appendChild(list);
   }
 
   // Shown honestly: without a push channel the client can't tell "nothing
@@ -194,17 +216,25 @@
   }
 
   function renderGate() {
+    const pbody = document.createElement('div');
+    pbody.className = 'pbody';
+    app.appendChild(pbody);
+
     const form = document.createElement('form');
+    form.className = 'stack';
     const label = document.createElement('label');
+    label.className = 'label';
     label.textContent = 'Room passphrase';
     label.htmlFor = 'passphrase';
     const input = document.createElement('input');
+    input.className = 'field';
     input.id = 'passphrase';
     input.name = 'passphrase';
     input.autocapitalize = 'off';
     input.autocorrect = 'off';
     input.autocomplete = 'off';
     const button = document.createElement('button');
+    button.className = 'btn wide';
     button.type = 'submit';
     button.textContent = 'Enter';
     const error = document.createElement('p');
@@ -212,7 +242,7 @@
     error.setAttribute('role', 'alert');
 
     form.append(label, input, button, error);
-    app.appendChild(form);
+    pbody.appendChild(form);
     input.focus();
 
     form.addEventListener('submit', async (e) => {
@@ -243,19 +273,33 @@
   }
 
   function renderName(team) {
-    const heading = document.createElement('p');
-    heading.textContent = `Table ${team.table_number}${team.team_name ? ' — ' + team.team_name : ''}`;
+    const pbody = document.createElement('div');
+    pbody.className = 'pbody';
+    app.appendChild(pbody);
+
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'label';
+    eyebrow.textContent = `Table ${team.table_number}`;
+    const heading = document.createElement('h1');
+    heading.className = 'display';
+    heading.style.fontSize = 'var(--t-h2)';
+    heading.style.margin = '4px 0 var(--s5)';
+    heading.textContent = team.team_name || "Who's on this phone?";
 
     const form = document.createElement('form');
+    form.className = 'stack';
     const label = document.createElement('label');
+    label.className = 'label';
     label.textContent = 'Your name';
     label.htmlFor = 'username';
     const input = document.createElement('input');
+    input.className = 'field';
     input.id = 'username';
     input.name = 'username';
     input.maxLength = 20;
     input.autocomplete = 'off';
     const button = document.createElement('button');
+    button.className = 'btn wide';
     button.type = 'submit';
     button.textContent = 'Join';
     const error = document.createElement('p');
@@ -263,7 +307,7 @@
     error.setAttribute('role', 'alert');
 
     form.append(label, input, button, error);
-    app.append(heading, form);
+    pbody.append(eyebrow, heading, form);
     input.focus();
 
     form.addEventListener('submit', async (e) => {
@@ -303,78 +347,135 @@
     app.appendChild(staleBanner);
     playEls.staleBanner = staleBanner;
 
-    const teamLine = document.createElement('p');
-    teamLine.className = 'team-line';
-    app.appendChild(teamLine);
-    playEls.teamLine = teamLine;
+    // Team colour band — identity, constant all night, never the content
+    // area (CLAUDE.md #18). Name and table number only; anything that
+    // changes tick to tick (captain, score) lives below it, not in the band.
+    const teamBand = document.createElement('div');
+    teamBand.className = 'band';
+    const teamName = document.createElement('span');
+    const tableNo = document.createElement('span');
+    tableNo.className = 'table-no num';
+    teamBand.append(teamName, tableNo);
+    app.appendChild(teamBand);
+    playEls.teamBand = teamBand;
+    playEls.teamName = teamName;
+    playEls.tableNo = tableNo;
+
+    const statusRow = document.createElement('div');
+    statusRow.className = 'label';
+    statusRow.style.display = 'flex';
+    statusRow.style.justifyContent = 'space-between';
+    statusRow.style.margin = 'var(--s3) var(--s4) 0';
+    const captainStatus = document.createElement('span');
+    const scoreText = document.createElement('span');
+    scoreText.className = 'num';
+    statusRow.append(captainStatus, scoreText);
+    app.appendChild(statusRow);
+    playEls.captainStatus = captainStatus;
+    playEls.scoreText = scoreText;
+
+    const pbody = document.createElement('div');
+    pbody.className = 'pbody';
+    app.appendChild(pbody);
+
+    const eyebrowRow = document.createElement('div');
+    eyebrowRow.style.display = 'flex';
+    eyebrowRow.style.justifyContent = 'space-between';
+    eyebrowRow.style.alignItems = 'baseline';
+    const roundEyebrow = document.createElement('span');
+    roundEyebrow.className = 'label';
+    const pointsEyebrow = document.createElement('span');
+    pointsEyebrow.className = 'label';
+    eyebrowRow.append(roundEyebrow, pointsEyebrow);
+    pbody.appendChild(eyebrowRow);
+    playEls.roundEyebrow = roundEyebrow;
+    playEls.pointsEyebrow = pointsEyebrow;
 
     const image = document.createElement('img');
     image.className = 'question-image';
     image.style.display = 'none';
-    app.appendChild(image);
+    pbody.appendChild(image);
     playEls.image = image;
 
     const prompt = document.createElement('h1');
-    app.appendChild(prompt);
+    prompt.className = 'display prompt';
+    pbody.appendChild(prompt);
     playEls.prompt = prompt;
 
     const videoWrap = document.createElement('div');
     videoWrap.className = 'video-wrap';
-    app.appendChild(videoWrap);
+    pbody.appendChild(videoWrap);
     playEls.videoWrap = videoWrap;
 
     const takeoverBtn = document.createElement('button');
     takeoverBtn.type = 'button';
-    takeoverBtn.textContent = 'Take over answering';
+    takeoverBtn.className = 'btn ghost wide';
+    takeoverBtn.textContent = 'Take over as captain';
     takeoverBtn.addEventListener('click', () => takeover());
-    app.appendChild(takeoverBtn);
+    pbody.appendChild(takeoverBtn);
     playEls.takeoverBtn = takeoverBtn;
 
     // Persistent text-answer widget — never recreated while a question is
     // OPEN, so a captain's half-typed draft survives an unrelated re-render
     // (CLAUDE.md #15, #17: never clear a typed draft that isn't theirs to lose).
     const textWrap = document.createElement('div');
-    textWrap.className = 'options';
+    textWrap.className = 'stack';
     textWrap.style.display = 'none';
     const textLabel = document.createElement('label');
+    textLabel.className = 'label';
     textLabel.textContent = 'Your answer';
     textLabel.htmlFor = 'answer-text';
     const textInput = document.createElement('input');
+    textInput.className = 'field';
     textInput.id = 'answer-text';
     textInput.maxLength = 200;
     textInput.autocomplete = 'off';
     const textSubmit = document.createElement('button');
     textSubmit.type = 'button';
+    textSubmit.className = 'btn wide';
     textSubmit.textContent = 'Submit answer';
     textSubmit.addEventListener('click', () => {
       submitAnswer(latestPlayState.question.id, textInput.value.trim());
     });
-    const textBadge = document.createElement('span');
-    textBadge.className = 'badge';
-    textWrap.append(textLabel, textInput, textSubmit, textBadge);
-    app.appendChild(textWrap);
+    textWrap.append(textLabel, textInput, textSubmit);
+    pbody.appendChild(textWrap);
     playEls.textWrap = textWrap;
     playEls.textInput = textInput;
     playEls.textSubmit = textSubmit;
-    playEls.textBadge = textBadge;
     playEls.lastQuestionId = null;
 
     const optionsWrap = document.createElement('div');
-    optionsWrap.className = 'options';
-    app.appendChild(optionsWrap);
+    optionsWrap.className = 'stack';
+    pbody.appendChild(optionsWrap);
     playEls.optionsWrap = optionsWrap;
+
+    // Submission confirmation / reveal result — a .notice for "it landed",
+    // a .status for the correct/wrong/pending verdict once revealed. Two
+    // different signals, never conflated (design-handover §8).
+    const resultNotice = document.createElement('div');
+    resultNotice.className = 'notice';
+    resultNotice.style.display = 'none';
+    resultNotice.style.marginTop = 'var(--s3)';
+    pbody.appendChild(resultNotice);
+    playEls.resultNotice = resultNotice;
+
+    const resultStatus = document.createElement('p');
+    resultStatus.style.marginTop = 'var(--s3)';
+    pbody.appendChild(resultStatus);
+    playEls.resultStatus = resultStatus;
 
     const note = document.createElement('p');
     note.className = 'note';
-    app.appendChild(note);
+    pbody.appendChild(note);
     playEls.note = note;
 
     const syncBtn = document.createElement('button');
     syncBtn.type = 'button';
-    syncBtn.className = 'sync';
+    syncBtn.className = 'btn ghost sm';
+    syncBtn.style.marginTop = 'var(--s5)';
     syncBtn.textContent = 'Sync now';
     syncBtn.addEventListener('click', () => pollHandle && pollHandle.syncNow());
-    app.appendChild(syncBtn);
+    pbody.appendChild(syncBtn);
 
     updatePlay(state);
 
@@ -388,9 +489,10 @@
   // never touches this (CLAUDE.md #18) — teamLine keeps its own class.
   function applyTheme(theme) {
     if (!theme) return;
-    const root = document.body.style;
+    const root = document.documentElement.style;
     const c = theme.colour;
     root.setProperty('--bg', c.bg);
+    root.setProperty('--bg2', c.bg2);
     root.setProperty('--surface', c.surface);
     root.setProperty('--surface-selected', c['surface-selected']);
     root.setProperty('--text', c.text);
@@ -398,6 +500,7 @@
     root.setProperty('--border', c.border);
     root.setProperty('--accent', c.accent);
     root.setProperty('--accent-text', c['accent-text']);
+    document.documentElement.dataset.theme = theme.dark ? 'dark' : 'light';
   }
 
   function updatePlay(state) {
@@ -406,43 +509,55 @@
     applyTheme(state.theme);
 
     const team = state.team;
-    playEls.teamLine.textContent =
-      `Table ${team.table_number}${team.team_name ? ' — ' + team.team_name : ''} · Score ${team.score}` +
-      (team.is_captain
-        ? ' — you are answering'
-        : team.captain_name ? ` — ${team.captain_name} is answering` : ' — no captain yet');
+    playEls.teamName.textContent = team.team_name || '';
+    playEls.tableNo.textContent = `Table ${team.table_number}`;
+    playEls.captainStatus.textContent = team.is_captain
+      ? 'You are answering'
+      : team.captain_name ? `${team.captain_name} is answering` : 'No captain yet';
+    playEls.scoreText.textContent = `Score ${team.score}`;
 
     const bandCss = colourCss(team.colour);
     if (bandCss) {
-      playEls.teamLine.style.background = bandCss;
-      playEls.teamLine.style.color = bestTextOn(team.colour.from);
+      playEls.teamBand.style.background = bandCss;
+      playEls.teamBand.style.color = bestTextOn(team.colour.from);
     } else {
-      playEls.teamLine.style.background = '';
-      playEls.teamLine.style.color = '';
+      playEls.teamBand.style.background = '';
+      playEls.teamBand.style.color = '';
     }
 
     playEls.takeoverBtn.style.display = team.is_captain ? 'none' : '';
 
+    playEls.roundEyebrow.textContent = state.round ? `Round ${state.round}` : '';
+
     if (!state.question) {
+      playEls.pointsEyebrow.textContent = '';
+      playEls.prompt.classList.remove('statement-prompt');
       playEls.prompt.textContent = 'Waiting for the next question…';
       playEls.image.style.display = 'none';
       clear(playEls.videoWrap);
       clear(playEls.optionsWrap);
       playEls.textWrap.style.display = 'none';
+      playEls.resultNotice.style.display = 'none';
+      playEls.resultStatus.textContent = '';
       playEls.note.textContent = '';
       playEls.lastQuestionId = null;
       return;
     }
 
+    playEls.pointsEyebrow.textContent = `${state.question.points} pt${state.question.points === 1 ? '' : 's'}`;
+
     // PENDING is a holding screen — the server withholds the prompt
     // entirely until the host opens it (CLAUDE.md #1), so there is nothing
     // to render here but "coming up."
     if (state.question.state === 'PENDING') {
+      playEls.prompt.classList.remove('statement-prompt');
       playEls.prompt.textContent = 'Question coming up…';
       playEls.image.style.display = 'none';
       clear(playEls.videoWrap);
       clear(playEls.optionsWrap);
       playEls.textWrap.style.display = 'none';
+      playEls.resultNotice.style.display = 'none';
+      playEls.resultStatus.textContent = '';
       playEls.note.textContent = 'Eyes on the screen.';
       playEls.lastQuestionId = null;
       return;
@@ -491,11 +606,15 @@
       playEls.image.style.display = 'none';
       clear(playEls.optionsWrap);
       playEls.textWrap.style.display = 'none';
+      playEls.resultNotice.style.display = 'none';
+      playEls.resultStatus.textContent = '';
       playEls.note.textContent = 'The answer opens once the clip finishes.';
       return;
     }
     const isNewQuestion = playEls.lastQuestionId !== state.question.id;
     playEls.lastQuestionId = state.question.id;
+
+    const canAnswer = team.is_captain && isOpen;
 
     if (state.question.type === 'mcq') {
       playEls.textWrap.style.display = 'none';
@@ -503,74 +622,103 @@
       clear(playEls.optionsWrap);
 
       const options = state.question.options || [];
-      options.forEach((opt) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'option';
-        btn.textContent = opt;
+      options.forEach((opt, i) => {
         const selected = !!(state.our_answer && state.our_answer.value === opt);
-        btn.setAttribute('aria-pressed', String(selected));
-        if (selected) btn.classList.add('selected');
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'tile' + (canAnswer ? '' : ' flat') + (selected ? ' seated' : '');
+        tile.setAttribute('aria-pressed', String(selected));
+
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = String.fromCharCode(65 + i);
+        const label = document.createElement('span');
+        label.textContent = opt;
+        tile.append(chip, label);
 
         if (isRevealed && opt === state.question.correct_answer) {
-          btn.classList.add('correct');
-          const badge = document.createElement('span');
-          badge.className = 'badge correct';
-          badge.textContent = '✓ Correct';
-          btn.appendChild(badge);
+          const mark = document.createElement('span');
+          mark.className = 'mark status ok';
+          mark.textContent = 'Correct';
+          tile.appendChild(mark);
         } else if (isRevealed && selected) {
-          btn.classList.add('incorrect');
-          const badge = document.createElement('span');
-          badge.className = 'badge incorrect';
-          badge.textContent = '✗ Wrong';
-          btn.appendChild(badge);
+          const mark = document.createElement('span');
+          mark.className = 'mark status bad';
+          mark.textContent = 'Wrong';
+          tile.appendChild(mark);
+        } else if (!isRevealed && selected && !canAnswer) {
+          const mark = document.createElement('span');
+          mark.className = 'mark status ok';
+          mark.textContent = 'Chosen';
+          tile.appendChild(mark);
         }
 
-        if (team.is_captain && isOpen) {
-          btn.addEventListener('click', () => submitAnswer(state.question.id, opt));
-        } else {
-          btn.disabled = true;
+        if (canAnswer) {
+          tile.addEventListener('click', () => submitAnswer(state.question.id, opt));
         }
-        playEls.optionsWrap.appendChild(btn);
+        playEls.optionsWrap.appendChild(tile);
       });
     } else {
       // Free text: the input is never recreated while a question is OPEN —
       // only its enabled state and, on a genuinely new question, its value.
-      playEls.optionsWrap.style.display = 'none';
       clear(playEls.optionsWrap);
-      playEls.textWrap.style.display = '';
-
-      if (isNewQuestion) {
-        playEls.textInput.value = state.our_answer ? state.our_answer.value : '';
-      }
-      playEls.textInput.disabled = !(team.is_captain && isOpen);
-      playEls.textSubmit.disabled = !(team.is_captain && isOpen);
-      playEls.textSubmit.style.display = team.is_captain ? '' : 'none';
-
-      playEls.textBadge.textContent = '';
-      playEls.textBadge.className = 'badge';
-      if (isRevealed && state.our_answer) {
-        if (state.our_answer.is_correct !== undefined) {
-          playEls.textBadge.textContent = state.our_answer.is_correct ? '✓ Correct' : '✗ Wrong';
-          playEls.textBadge.classList.add(state.our_answer.is_correct ? 'correct' : 'incorrect');
-        } else {
-          playEls.textBadge.textContent = 'Scored at the end of the round';
+      if (isRevealed) {
+        playEls.textWrap.style.display = 'none';
+        playEls.optionsWrap.style.display = '';
+        const tile = document.createElement('div');
+        tile.className = 'tile flat seated';
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = '✓';
+        const label = document.createElement('span');
+        label.textContent = state.question.correct_answer;
+        tile.append(chip, label);
+        playEls.optionsWrap.appendChild(tile);
+      } else {
+        playEls.optionsWrap.style.display = 'none';
+        playEls.textWrap.style.display = '';
+        if (isNewQuestion) {
+          playEls.textInput.value = state.our_answer ? state.our_answer.value : '';
         }
+        playEls.textInput.disabled = !canAnswer;
+        playEls.textSubmit.disabled = !canAnswer;
+        playEls.textSubmit.style.display = team.is_captain ? '' : 'none';
+      }
+    }
+
+    // Submission confirmation (it landed) vs reveal result (right/wrong) —
+    // two distinct signals, never conflated (design-handover §8).
+    playEls.resultNotice.style.display = 'none';
+    playEls.resultStatus.textContent = '';
+    playEls.resultStatus.className = '';
+
+    if (canAnswer && state.our_answer && !isRevealed) {
+      const time = new Date(state.our_answer.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      playEls.resultNotice.textContent = `Answer submitted — ${state.our_answer.value}, ${time}`;
+      playEls.resultNotice.style.display = '';
+    } else if (isRevealed && state.our_answer && state.question.type !== 'mcq') {
+      // MCQ already shows correct/wrong per-tile — this line is only for
+      // free text, where the tile above just shows the correct answer.
+      if (state.our_answer.is_correct !== undefined) {
+        playEls.resultStatus.className = 'status ' + (state.our_answer.is_correct ? 'ok' : 'bad');
+        playEls.resultStatus.textContent = state.our_answer.is_correct ? 'Correct' : 'Wrong';
+      } else {
+        playEls.resultStatus.className = 'status wait';
+        playEls.resultStatus.textContent = 'Scored at the end of the round';
       }
     }
 
     if (!team.is_captain) {
       playEls.note.textContent = state.our_answer
-        ? `${state.our_answer.value} was answered for your table.`
+        ? (team.captain_name ? `${team.captain_name} answered for your table.` : 'Answered for your table.')
         : 'Waiting for your captain to answer.';
     } else if (isRevealed) {
       if (!state.our_answer) {
         playEls.note.textContent = 'Your table did not answer.';
-      } else if (state.question.type === 'mcq') {
-        playEls.note.textContent = state.our_answer.is_correct
-          ? 'Your table got this one.' : 'Your table did not get this one.';
+      } else if (state.question.type !== 'mcq') {
+        playEls.note.textContent = `Your answer: ${state.our_answer.value}`;
       } else {
-        playEls.note.textContent = `Correct answer: ${state.question.correct_answer}`;
+        playEls.note.textContent = '';
       }
     } else if (!isOpen) {
       playEls.note.textContent = 'This question is not open for answers.';

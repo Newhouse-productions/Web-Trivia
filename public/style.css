@@ -1,24 +1,10 @@
-:root {
-  color-scheme: light;
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --surface-selected: #eef2ff;
-  --text: #111827;
-  --text-muted: #6b7280;
-  --border: #d1d5db;
-  --accent: #4338ca;
-  --accent-text: #ffffff;
-  --error: #b91c1c;
-}
-
-* { box-sizing: border-box; }
+/* Theme tokens and box-sizing live in css/tokens.css, shared by all three
+   surfaces (CLAUDE.md #19/#21) — this file only holds what's genuinely
+   play+ops specific. --error is retired in favour of the fixed --wrong
+   token; anything still referencing it below is legacy pending migration. */
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.4 system-ui, -apple-system, sans-serif;
-  padding: 16px;
 }
 
 .sr-only {
@@ -31,7 +17,20 @@ body {
 }
 
 h1 { font-size: 1.25rem; margin: 16px 0; }
-h1.statement-prompt { font-size: 1.6rem; font-weight: 800; }
+
+/* Content area — padding lives here, not on body, so the team band /
+   vitals strip above it can sit flush with the screen edge
+   (design-handover §2). */
+.pbody, .cbody {
+  padding: var(--s4);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(168deg, var(--bg), var(--bg2));
+}
+
+.prompt { font-size: var(--t-h2); margin: var(--s3) 0 var(--s4); }
+.prompt.statement-prompt { font-size: var(--t-h1); }
 
 label { display: block; margin-bottom: 8px; font-weight: 600; }
 
@@ -70,69 +69,13 @@ button[type="submit"] {
 
 button:disabled { opacity: 0.6; cursor: default; }
 
-.options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.option {
-  text-align: left;
-  border-width: 2px;
-  width: 100%;
-}
-
-.option.selected {
-  border-color: var(--accent);
-  background: var(--surface-selected);
-  font-weight: 700;
-}
-
-button.selected {
-  border-color: var(--accent);
-  background: var(--surface-selected);
-  font-weight: 700;
-}
-
-.option:disabled { opacity: 0.75; cursor: default; }
-
 .error {
-  color: var(--error);
+  color: var(--wrong);
   font-weight: 600;
   min-height: 1.2em;
 }
 
 .note { color: var(--text-muted); }
-
-/* Team colour band: identifier only, never the content area (CLAUDE.md #18).
-   Hairline border so it reads as distinct against any theme underneath
-   (CLAUDE.md #20.10). */
-.team-line {
-  color: var(--text-muted);
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  margin: 0 0 12px;
-}
-
-.team-swatch {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  vertical-align: -2px;
-  margin-right: 8px;
-}
-
-.result { font-weight: 600; }
-
-.sync {
-  margin-top: 20px;
-  background: var(--surface);
-  color: var(--text-muted);
-}
 
 .stale-banner {
   padding: 8px 12px;
@@ -141,32 +84,7 @@ button.selected {
   margin-bottom: 8px;
 }
 .stale-banner.note { background: var(--surface); color: var(--text-muted); }
-.stale-banner.error { background: #fef2f2; color: var(--error); border: 1px solid var(--error); }
-
-/* Correct/wrong use border style plus a text badge, never colour alone
-   (CLAUDE.md #16). */
-.option.correct { border-style: solid; border-color: #15803d; }
-.option.incorrect { border-style: dashed; border-color: var(--error); }
-
-.badge { display: inline-block; margin-left: 8px; font-weight: 700; }
-.badge.correct { color: #15803d; }
-.badge.incorrect { color: var(--error); }
-
-.vitals { font-weight: 600; margin-bottom: 12px; }
-
-.question-list { display: flex; flex-direction: column; gap: 10px; }
-
-.question-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.question-row span { flex: 1 1 200px; }
+.stale-banner.error { background: var(--surface); color: var(--wrong); border: 1px solid var(--wrong); }
 
 .question-image { max-width: 100%; border-radius: 8px; margin-top: 8px; }
 .video-wrap iframe { max-width: 100%; border-radius: 8px; margin-top: 8px; }

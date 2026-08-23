@@ -3,6 +3,10 @@
 // build steps; picking those roles here just says so for now.
 (function () {
   const app = document.getElementById('app');
+  // Stopgap: body's own padding was retired in favour of each surface's
+  // .pbody/.cbody supplying it (design-handover §2), so this console needs
+  // its own until its reskin slice gives it a proper .cbody wrapper.
+  app.style.padding = '16px';
   let pollHandle = null;
   let lastState = null;
   let hostEls = null;
@@ -20,37 +24,78 @@
       : colour.from;
   }
 
+  // Same resolved theme as the phones and the big screen, painting the
+  // console's own chrome (CLAUDE.md #19) — canonicalized on documentElement
+  // to match play.js/screen.js.
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement.style;
+    const c = theme.colour;
+    root.setProperty('--bg', c.bg);
+    root.setProperty('--bg2', c.bg2);
+    root.setProperty('--surface', c.surface);
+    root.setProperty('--surface-selected', c['surface-selected']);
+    root.setProperty('--text', c.text);
+    root.setProperty('--text-muted', c['text-muted']);
+    root.setProperty('--border', c.border);
+    root.setProperty('--accent', c.accent);
+    root.setProperty('--accent-text', c['accent-text']);
+    document.documentElement.dataset.theme = theme.dark ? 'dark' : 'light';
+  }
+
   function renderRolePicker() {
     clear(app);
-    const heading = document.createElement('h1');
-    heading.textContent = 'Operator sign in';
-    app.appendChild(heading);
+    app.style.padding = '';
+    const pbody = document.createElement('div');
+    pbody.className = 'cbody';
+    app.appendChild(pbody);
 
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s2)';
+    heading.textContent = 'Operator sign in';
+    pbody.appendChild(heading);
+
+    const stack = document.createElement('div');
+    stack.className = 'stack';
     ['host', 'marker', 'floor', 'admin'].forEach((role) => {
       const btn = document.createElement('button');
       btn.type = 'button';
+      btn.className = 'tile';
       btn.textContent = role[0].toUpperCase() + role.slice(1);
       btn.addEventListener('click', () => renderPinForm(role));
-      app.appendChild(btn);
+      stack.appendChild(btn);
     });
+    pbody.appendChild(stack);
   }
 
   function renderPinForm(role) {
     clear(app);
-    const heading = document.createElement('h1');
+    const pbody = document.createElement('div');
+    pbody.className = 'cbody';
+    app.appendChild(pbody);
+
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s3)';
     heading.textContent = `${role[0].toUpperCase()}${role.slice(1)} sign in`;
 
     const form = document.createElement('form');
+    form.className = 'stack';
 
     const nameLabel = document.createElement('label');
+    nameLabel.className = 'label';
     nameLabel.textContent = 'Your name';
     const nameInput = document.createElement('input');
+    nameInput.className = 'field';
     nameInput.maxLength = 20;
     nameInput.autocomplete = 'off';
 
     const pinLabel = document.createElement('label');
+    pinLabel.className = 'label';
     pinLabel.textContent = 'PIN';
     const input = document.createElement('input');
+    input.className = 'field';
     input.type = 'password';
     input.inputMode = 'numeric';
     input.maxLength = 6;
@@ -58,9 +103,11 @@
 
     const button = document.createElement('button');
     button.type = 'submit';
+    button.className = 'btn wide';
     button.textContent = 'Sign in';
     const back = document.createElement('button');
     back.type = 'button';
+    back.className = 'btn ghost wide';
     back.textContent = 'Back';
     back.addEventListener('click', renderRolePicker);
     const error = document.createElement('p');
@@ -68,7 +115,7 @@
     error.setAttribute('role', 'alert');
 
     form.append(nameLabel, nameInput, pinLabel, input, button, error);
-    app.append(heading, form, back);
+    pbody.append(heading, form, back);
     nameInput.focus();
 
     form.addEventListener('submit', async (e) => {
@@ -109,40 +156,104 @@
     app.appendChild(p);
   }
 
+  // Host keyboard shortcuts: one listener, guarded against text input focus
+  // and modifier keys, calling the exact same functions the buttons call —
+  // a presentation clicker should be able to run the whole night
+  // (design-handover §8). Assigned in buildPauseControl/renderHost below so
+  // the shortcut always fires whatever is currently the enabled action.
+  let hostPauseAction = null;
+  let hostResumeAction = null;
+  let hostPrimaryAction = null; // { state, questionId } — the current question's one enabled Space/C/R action
+  let hostCloseAction = null;
+  let hostRevealAction = null;
+
+  function hostKeydown(e) {
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (hostPrimaryAction) sendCommand(hostPrimaryAction.questionId, hostPrimaryAction.state);
+    } else if (e.key === 'c' || e.key === 'C') {
+      if (hostCloseAction) sendCommand(hostCloseAction.questionId, 'CLOSED');
+    } else if (e.key === 'r' || e.key === 'R') {
+      if (hostRevealAction) sendCommand(hostRevealAction.questionId, 'REVEALED');
+    } else if (e.key === 'b' || e.key === 'B') {
+      hostEls.bonusGrid && hostEls.bonusGrid.querySelector('button')?.focus();
+    } else if (e.key === 'p' || e.key === 'P') {
+      if (lastState && lastState.paused) { if (hostResumeAction) hostResumeAction(); }
+      else if (hostPauseAction) hostPauseAction();
+    }
+  }
+
   function startHost() {
     clear(app);
+    app.style.padding = '';
     hostEls = {};
 
-    const vitals = document.createElement('p');
+    const vitals = document.createElement('div');
     vitals.className = 'vitals';
-    app.appendChild(vitals);
+    app.appendChild(vitals); // flush with the console's top edge, not inset
     hostEls.vitals = vitals;
 
-    const answered = document.createElement('p');
-    app.appendChild(answered);
-    hostEls.answered = answered;
+    const cbody = document.createElement('div');
+    cbody.className = 'cbody';
+    app.appendChild(cbody);
+    hostEls.cbody = cbody;
 
-    const avCue = document.createElement('p');
-    avCue.className = 'error';
+    const answeredLabel = document.createElement('div');
+    answeredLabel.className = 'label';
+    answeredLabel.style.margin = 'var(--s4) 0 var(--s2)';
+    cbody.appendChild(answeredLabel);
+    hostEls.answeredLabel = answeredLabel;
+
+    const tally = document.createElement('div');
+    tally.className = 'tally';
+    cbody.appendChild(tally);
+    hostEls.tally = tally;
+
+    const outstandingNote = document.createElement('p');
+    outstandingNote.className = 'note';
+    cbody.appendChild(outstandingNote);
+    hostEls.outstandingNote = outstandingNote;
+
+    const avCue = document.createElement('div');
+    avCue.className = 'notice';
     avCue.style.display = 'none';
-    app.appendChild(avCue);
+    avCue.style.marginTop = 'var(--s3)';
+    cbody.appendChild(avCue);
     hostEls.avCue = avCue;
 
-    buildPauseControl();
+    const rule1 = document.createElement('hr');
+    rule1.className = 'rule';
+    cbody.appendChild(rule1);
+
+    buildPauseControl(cbody);
+
+    const rule2 = document.createElement('hr');
+    rule2.className = 'rule';
+    cbody.appendChild(rule2);
 
     const list = document.createElement('div');
-    list.className = 'question-list';
-    app.appendChild(list);
+    list.className = 'stack';
+    cbody.appendChild(list);
     hostEls.list = list;
 
     const error = document.createElement('p');
     error.className = 'error';
     error.setAttribute('role', 'alert');
-    app.appendChild(error);
+    cbody.appendChild(error);
     hostEls.error = error;
 
-    buildTableSupport();
-    buildScoresPanel();
+    const rule3 = document.createElement('hr');
+    rule3.className = 'rule';
+    cbody.appendChild(rule3);
+
+    buildTableSupport(cbody);
+    buildScoresPanel(cbody);
+
+    window.addEventListener('keydown', hostKeydown);
 
     refreshHost();
     pollHandle = window.Poll.start({
@@ -159,23 +270,51 @@
     renderHost(state);
   }
 
+  function vitalCell(k, v, alert) {
+    const cell = document.createElement('div');
+    cell.className = 'vital';
+    const key = document.createElement('span');
+    key.className = 'k';
+    key.textContent = k;
+    const val = document.createElement('span');
+    val.className = 'v num' + (alert ? ' alert' : '');
+    val.textContent = v;
+    cell.append(key, val);
+    return cell;
+  }
+
   function renderHost(state) {
     lastState = state;
-    const parts = [
-      state.round_progress
-        ? `Round ${state.round_progress.number} · Q${state.round_progress.index} of ${state.round_progress.total}`
-        : `Round phase: ${state.round_phase}`,
-      state.current ? `${state.current.state}` : 'no current question',
-      `Marking: ${state.marking.marked}/${state.marking.total}`,
-      `Tables live: ${state.tables_live.live}/${state.tables_live.total}`,
-      `v${state.version}`
-    ];
-    hostEls.vitals.textContent = parts.join(' — ');
+    applyTheme(state.theme);
 
-    hostEls.answered.textContent = state.current
-      ? `Answered: ${state.answered.count}/${state.answered.total}` +
-        (state.answered.outstanding.length ? ` — outstanding: ${state.answered.outstanding.join(', ')}` : '')
-      : '';
+    clear(hostEls.vitals);
+    hostEls.vitals.append(
+      vitalCell('Round', state.round_progress
+        ? `${state.round_progress.number} · Q${state.round_progress.index}/${state.round_progress.total}`
+        : state.round_phase),
+      vitalCell('Question', state.current ? state.current.state : '—'),
+      vitalCell('Marking', `${state.marking.marked}/${state.marking.total}`, state.marking.marked < state.marking.total),
+      vitalCell('Tables', `${state.tables_live.live}/${state.tables_live.total}`, state.tables_live.live < state.tables_live.total),
+      vitalCell('Version', `v${state.version}`)
+    );
+
+    // The tally is the one live thing in the room — it answers the host's
+    // one question: wait, or move on (design-handover: bLive).
+    clear(hostEls.tally);
+    if (state.current) {
+      hostEls.answeredLabel.textContent = `Answered ${state.answered.count} / ${state.answered.total}`;
+      state.answered.tables.forEach((t) => {
+        const cell = document.createElement('div');
+        cell.className = 't' + (t.answered ? ' in' : '');
+        cell.textContent = String(t.table_number);
+        hostEls.tally.appendChild(cell);
+      });
+      hostEls.outstandingNote.textContent = state.answered.outstanding.length
+        ? `Not yet answered: ${state.answered.outstanding.join(', ')}` : '';
+    } else {
+      hostEls.answeredLabel.textContent = '';
+      hostEls.outstandingNote.textContent = '';
+    }
 
     // AV runs outside this app — cue card only, a human presses play on the
     // venue laptop (CLAUDE.md/scope: "Console displays a cue card; a human
@@ -186,10 +325,23 @@
       ? `${state.current.av_cue} — play from the venue laptop, not sent to phones. Open the question once it finishes.`
       : '';
 
+    if (state.paused) {
+      hostEls.pauseStatus.style.display = '';
+      hostEls.pauseStatus.textContent = `Paused — ${state.paused.reason || 'no reason given'}`;
+    } else {
+      hostEls.pauseStatus.style.display = 'none';
+    }
+
+    hostPauseAction = doPause;
+    hostResumeAction = doResume;
+    hostPrimaryAction = null;
+    hostCloseAction = null;
+    hostRevealAction = null;
+
     clear(hostEls.list);
     state.questions.forEach((qu) => {
       const row = document.createElement('div');
-      row.className = 'question-row';
+      row.className = 'tile flat';
 
       const label = document.createElement('span');
       label.textContent = `R${qu.round} Q${qu.order_no}: ${qu.prompt}`;
@@ -201,19 +353,32 @@
       const openLabel = isCurrent && state.current.av_cue ? 'Open after clip' : 'Open';
       const actions = [
         { state: 'PENDING', label: 'Show', enabled: !isCurrent },
-        { state: 'OPEN', label: openLabel, enabled: isCurrent && currentState === 'PENDING' },
-        { state: 'CLOSED', label: 'Close', enabled: isCurrent && currentState === 'OPEN' },
-        { state: 'REVEALED', label: 'Reveal', enabled: isCurrent && currentState === 'CLOSED' },
+        { state: 'OPEN', label: openLabel, enabled: isCurrent && currentState === 'PENDING', kbd: 'Space' },
+        { state: 'CLOSED', label: 'Close', enabled: isCurrent && currentState === 'OPEN', kbd: 'C' },
+        { state: 'REVEALED', label: 'Reveal', enabled: isCurrent && currentState === 'CLOSED', kbd: 'R' },
         { state: 'OPEN', label: 'Reopen', enabled: isCurrent && (currentState === 'CLOSED' || currentState === 'REVEALED') }
       ];
 
       actions.forEach((action) => {
+        if (!action.enabled) return;
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = action.label;
-        btn.disabled = !action.enabled;
+        btn.className = 'btn sm';
+        btn.textContent = action.label + ' ';
+        if (action.kbd) {
+          const kbd = document.createElement('kbd');
+          kbd.textContent = action.kbd;
+          btn.appendChild(kbd);
+        }
         btn.addEventListener('click', () => sendCommand(qu.id, action.state));
         row.appendChild(btn);
+
+        // Space always progresses the CURRENT question only (never "Show",
+        // which switches to a different question — too consequential for
+        // one keystroke). C/R are scoped the same way.
+        if (action.kbd === 'Space') hostPrimaryAction = { questionId: qu.id, state: action.state };
+        if (action.kbd === 'C') hostCloseAction = { questionId: qu.id };
+        if (action.kbd === 'R') hostRevealAction = { questionId: qu.id };
       });
 
       hostEls.list.appendChild(row);
@@ -251,16 +416,54 @@
     ['Technical issue', 'Back shortly — technical issue.']
   ];
 
-  function buildPauseControl() {
-    const reasonInput = document.createElement('input');
-    reasonInput.placeholder = 'Reason (e.g. food service)';
-    const messageInput = document.createElement('input');
-    messageInput.placeholder = 'Message shown to the room';
+  async function doPause() {
+    await fetch('/host/pause', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: hostEls.pauseReason.value, message: hostEls.pauseMessage.value,
+        expects_version: lastState.version
+      })
+    });
+    await refreshHost();
+  }
+
+  async function doResume() {
+    await fetch('/host/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expects_version: lastState.version })
+    });
+    await refreshHost();
+  }
+
+  function buildPauseControl(container) {
+    const status = document.createElement('p');
+    status.className = 'status wait';
+    status.style.display = 'none';
+    status.style.marginBottom = 'var(--s3)';
+    container.appendChild(status);
+    hostEls.pauseStatus = status;
 
     const presetsRow = document.createElement('div');
+    presetsRow.style.display = 'flex';
+    presetsRow.style.gap = 'var(--s2)';
+    presetsRow.style.flexWrap = 'wrap';
+    presetsRow.style.marginBottom = 'var(--s3)';
+
+    const reasonInput = document.createElement('input');
+    reasonInput.className = 'field';
+    reasonInput.placeholder = 'Reason (e.g. food service)';
+    const messageInput = document.createElement('input');
+    messageInput.className = 'field';
+    messageInput.placeholder = 'Message shown to the room';
+    hostEls.pauseReason = reasonInput;
+    hostEls.pauseMessage = messageInput;
+
     PAUSE_PRESETS.forEach(([reason, message]) => {
       const presetBtn = document.createElement('button');
       presetBtn.type = 'button';
+      presetBtn.className = 'btn ghost sm';
       presetBtn.textContent = reason;
       presetBtn.addEventListener('click', () => {
         reasonInput.value = reason;
@@ -269,51 +472,49 @@
       presetsRow.appendChild(presetBtn);
     });
 
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = 'var(--s2)';
+    btnRow.style.marginTop = 'var(--s3)';
+
     const pauseBtn = document.createElement('button');
     pauseBtn.type = 'button';
-    pauseBtn.textContent = 'Pause';
+    pauseBtn.className = 'btn ghost';
+    pauseBtn.append('Pause ', Object.assign(document.createElement('kbd'), { textContent: 'P' }));
     const resumeBtn = document.createElement('button');
     resumeBtn.type = 'button';
-    resumeBtn.textContent = 'Resume';
+    resumeBtn.className = 'btn';
+    resumeBtn.append('Resume ', Object.assign(document.createElement('kbd'), { textContent: 'P' }));
 
-    pauseBtn.addEventListener('click', async () => {
-      await fetch('/host/pause', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reason: reasonInput.value, message: messageInput.value,
-          expects_version: lastState.version
-        })
-      });
-      await refreshHost();
-    });
-    resumeBtn.addEventListener('click', async () => {
-      await fetch('/host/resume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expects_version: lastState.version })
-      });
-      await refreshHost();
-    });
+    pauseBtn.addEventListener('click', doPause);
+    resumeBtn.addEventListener('click', doResume);
+    btnRow.append(pauseBtn, resumeBtn);
 
-    app.append(presetsRow, reasonInput, messageInput, pauseBtn, resumeBtn);
+    container.append(presetsRow, reasonInput, messageInput, btnRow);
   }
 
   // --- table support: bonus + answer on a table's behalf ------------------
 
-  function buildTableSupport() {
-    const heading = document.createElement('h1');
+  function buildTableSupport(container) {
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s2)';
     heading.textContent = 'Table support';
-    app.appendChild(heading);
+    container.appendChild(heading);
 
+    const answerRow = document.createElement('div');
+    answerRow.className = 'stack';
     const teamInput = document.createElement('input');
+    teamInput.className = 'field';
     teamInput.placeholder = 'Team id';
     teamInput.inputMode = 'numeric';
 
     const valueInput = document.createElement('input');
+    valueInput.className = 'field';
     valueInput.placeholder = 'Answer value';
     const answerBtn = document.createElement('button');
     answerBtn.type = 'button';
+    answerBtn.className = 'btn ghost';
     answerBtn.textContent = 'Enter answer for table';
     const answerMsg = document.createElement('p');
     answerMsg.className = 'error';
@@ -332,13 +533,28 @@
       answerMsg.textContent = res.ok ? 'Recorded.' : `Could not record: ${data.error}`;
       await refreshHost();
     });
+    answerRow.append(teamInput, valueInput, answerBtn, answerMsg);
+    container.appendChild(answerRow);
+
+    const bonusRule = document.createElement('hr');
+    bonusRule.className = 'rule';
+    container.appendChild(bonusRule);
 
     // Bonus: tap a table, tap an amount, award. Two taps, or it won't get
-    // used during a live night (host-console mockup note).
-    const bonusHeading = document.createElement('p');
+    // used during a live night (host-console mockup note). B focuses the
+    // grid rather than awarding blind — a real award still needs a table
+    // and points chosen first.
+    const bonusHeading = document.createElement('div');
+    bonusHeading.className = 'label';
+    bonusHeading.style.marginBottom = 'var(--s2)';
     bonusHeading.textContent = 'Award a bonus — tap a table';
+    container.appendChild(bonusHeading);
+
     const bonusGrid = document.createElement('div');
-    bonusGrid.className = 'question-list';
+    bonusGrid.style.display = 'grid';
+    bonusGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(64px, 1fr))';
+    bonusGrid.style.gap = 'var(--s2)';
+    hostEls.bonusGrid = bonusGrid;
     let selectedTeamId = null;
 
     async function refreshBonusGrid() {
@@ -348,33 +564,41 @@
       data.scores.forEach((s) => {
         const btn = document.createElement('button');
         btn.type = 'button';
+        btn.className = 'tile' + (s.team_id === selectedTeamId ? ' seated' : '');
+        btn.style.justifyContent = 'center';
+        if (s.colour) { btn.style.borderLeftWidth = '4px'; btn.style.borderLeftColor = s.colour.from; }
         btn.textContent = `${s.table_number}`;
-        if (s.colour) { btn.style.borderLeftWidth = '6px'; btn.style.borderLeftColor = s.colour.from; }
-        if (s.team_id === selectedTeamId) btn.classList.add('selected');
         btn.addEventListener('click', () => { selectedTeamId = s.team_id; refreshBonusGrid(); });
         bonusGrid.appendChild(btn);
       });
     }
     refreshBonusGrid();
 
-    let pointsValue = 1;
     const pointsRow = document.createElement('div');
+    pointsRow.style.display = 'flex';
+    pointsRow.style.gap = 'var(--s2)';
+    pointsRow.style.margin = 'var(--s3) 0';
+    let pointsValue = 1;
     [1, 2, 3].forEach((n) => {
       const pill = document.createElement('button');
       pill.type = 'button';
+      pill.className = 'btn ghost sm';
       pill.textContent = `+${n}`;
       pill.addEventListener('click', () => { pointsValue = n; customPoints.value = ''; });
       pointsRow.appendChild(pill);
     });
     const customPoints = document.createElement('input');
+    customPoints.className = 'field';
     customPoints.placeholder = 'Custom amount';
     customPoints.inputMode = 'numeric';
     pointsRow.appendChild(customPoints);
 
     const reasonInput = document.createElement('input');
+    reasonInput.className = 'field';
     reasonInput.placeholder = 'Reason (shown on their phones)';
     const bonusBtn = document.createElement('button');
     bonusBtn.type = 'button';
+    bonusBtn.className = 'btn wide';
     bonusBtn.textContent = 'Award';
     const bonusMsg = document.createElement('p');
     bonusMsg.className = 'error';
@@ -397,30 +621,34 @@
       await refreshScores();
     });
 
-    app.append(
-      teamInput,
-      valueInput, answerBtn, answerMsg,
-      bonusHeading, bonusGrid, pointsRow, reasonInput, bonusBtn, bonusMsg
-    );
+    container.append(bonusGrid, pointsRow, reasonInput, bonusBtn, bonusMsg);
   }
 
   // --- scores (derived on read, CLAUDE.md #13) ----------------------------
 
-  function buildScoresPanel() {
-    const heading = document.createElement('h1');
+  function buildScoresPanel(container) {
+    const rule = document.createElement('hr');
+    rule.className = 'rule';
+    container.appendChild(rule);
+
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s2)';
     heading.textContent = 'Scores';
-    app.appendChild(heading);
+    container.appendChild(heading);
 
     const list = document.createElement('div');
-    list.className = 'question-list';
-    app.appendChild(list);
+    list.className = 'stack';
+    container.appendChild(list);
     hostEls.scoresList = list;
 
     const refreshBtn = document.createElement('button');
     refreshBtn.type = 'button';
+    refreshBtn.className = 'btn ghost sm';
+    refreshBtn.style.marginTop = 'var(--s3)';
     refreshBtn.textContent = 'Refresh scores';
     refreshBtn.addEventListener('click', refreshScores);
-    app.appendChild(refreshBtn);
+    container.appendChild(refreshBtn);
 
     refreshScores();
   }
@@ -432,10 +660,15 @@
     clear(hostEls.scoresList);
     data.scores.forEach((s) => {
       const row = document.createElement('div');
-      row.className = 'question-row';
+      row.className = 'tile flat';
       const label = document.createElement('span');
-      label.textContent = `Table ${s.table_number} — ${s.team_name}: ${s.score}`;
-      row.appendChild(label);
+      label.textContent = `Table ${s.table_number} — ${s.team_name}`;
+      const score = document.createElement('span');
+      score.className = 'num';
+      score.style.marginLeft = 'auto';
+      score.style.fontWeight = '700';
+      score.textContent = String(s.score);
+      row.append(label, score);
       hostEls.scoresList.appendChild(row);
     });
     if (data.recent_bonuses.length) {
@@ -455,15 +688,22 @@
 
   function startMarker() {
     clear(app);
+    app.style.padding = '';
     markerEls = {};
 
-    const heading = document.createElement('h1');
+    const cbody = document.createElement('div');
+    cbody.className = 'cbody';
+    app.appendChild(cbody);
+
+    const heading = document.createElement('div');
+    heading.className = 'label';
+    heading.style.marginBottom = 'var(--s2)';
     heading.textContent = 'Marking queue';
-    app.appendChild(heading);
+    cbody.appendChild(heading);
 
     const list = document.createElement('div');
-    list.className = 'question-list';
-    app.appendChild(list);
+    list.className = 'stack';
+    cbody.appendChild(list);
     markerEls.list = list;
 
     refreshQueue();
@@ -481,32 +721,34 @@
   }
 
   function renderQueue(state) {
+    applyTheme(state.theme);
     clear(markerEls.list);
     if (!state.questions.length) {
       const p = document.createElement('p');
+      p.className = 'note';
       p.textContent = 'Nothing waiting to be marked.';
       markerEls.list.appendChild(p);
       return;
     }
 
     state.questions.forEach((qu) => {
-      const row = document.createElement('div');
-      row.className = 'question-row';
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'tile';
 
       const label = document.createElement('span');
-      label.textContent = `${qu.prompt} — ${qu.unmarked_count}/${qu.total_answers} unmarked`;
-      row.appendChild(label);
+      label.textContent = qu.prompt;
+      const mark = document.createElement('span');
+      mark.className = 'mark status wait';
+      mark.textContent = `${qu.unmarked_count}/${qu.total_answers} to judge`;
+      row.append(label, mark);
 
-      const btn = document.createElement('button');
-      btn.type = 'button';
       if (qu.claim.held) {
-        btn.textContent = `Claimed by ${qu.claim.marker}`;
-        btn.disabled = true;
+        row.classList.add('flat');
+        mark.textContent = `Claimed by ${qu.claim.marker}`;
       } else {
-        btn.textContent = 'Claim';
-        btn.addEventListener('click', () => claimAndOpen(qu.id));
+        row.addEventListener('click', () => claimAndOpen(qu.id));
       }
-      row.appendChild(btn);
 
       markerEls.list.appendChild(row);
     });
@@ -533,54 +775,115 @@
     const res = await fetch(`/marker/question/${questionId}`, { cache: 'no-store' });
     if (!res.ok) { startMarker(); return; }
     const data = await res.json();
+    applyTheme(data.theme);
 
-    const heading = document.createElement('h1');
-    heading.textContent = data.question.prompt;
-    app.appendChild(heading);
+    const cbody = document.createElement('div');
+    cbody.className = 'cbody';
+    app.appendChild(cbody);
+
+    const pending = data.answers.filter((a) => a.is_correct === null);
+    const judgedCount = data.answers.length - pending.length;
+
+    const headRow = document.createElement('div');
+    headRow.style.display = 'flex';
+    headRow.style.justifyContent = 'space-between';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = `${judgedCount} auto-matched · ${pending.length} to judge`;
+    const holdLabel = document.createElement('span');
+    holdLabel.className = 'label';
+    holdLabel.textContent = 'You hold this question';
+    headRow.append(label, holdLabel);
+    cbody.appendChild(headRow);
+
+    // The correct answer stays on screen throughout the sweep — you're
+    // reading it, not remembering it (design-handover §8).
+    const prompt = document.createElement('h1');
+    prompt.className = 'display';
+    prompt.style.fontSize = 'var(--t-h2)';
+    prompt.style.margin = 'var(--s2) 0 var(--s2)';
+    prompt.textContent = data.question.prompt;
+    cbody.appendChild(prompt);
 
     const answer = document.createElement('p');
-    answer.textContent = `Correct answer: ${data.question.correct_answer}` +
-      (data.question.aliases.length ? ` (also: ${data.question.aliases.join(', ')})` : '');
-    app.appendChild(answer);
+    answer.className = 'note';
+    answer.textContent = data.question.correct_answer +
+      (data.question.aliases.length ? ` · also accepting ${data.question.aliases.join(', ')}` : '');
+    cbody.appendChild(answer);
 
-    const list = document.createElement('div');
-    list.className = 'question-list';
-    app.appendChild(list);
+    if (!pending.length) {
+      const notice = document.createElement('div');
+      notice.className = 'notice ok';
+      notice.style.marginTop = 'var(--s4)';
+      notice.textContent = 'All answers judged for this question.';
+      cbody.appendChild(notice);
+    } else {
+      const a = pending[0];
+      const card = document.createElement('div');
+      card.className = 'tile flat';
+      card.style.flexDirection = 'column';
+      card.style.alignItems = 'flex-start';
+      card.style.gap = 'var(--s1)';
+      card.style.margin = 'var(--s4) 0 var(--s3)';
+      const who = document.createElement('span');
+      who.className = 'label';
+      who.textContent = `Table ${a.table_number}${a.team_name ? ' — ' + a.team_name : ''}`;
+      const value = document.createElement('span');
+      value.className = 'display';
+      value.style.fontSize = 'var(--t-h3)';
+      value.textContent = a.value;
+      card.append(who, value);
+      cbody.appendChild(card);
 
-    data.answers.forEach((a) => {
-      const row = document.createElement('div');
-      row.className = 'question-row';
-
-      const label = document.createElement('span');
-      label.textContent = `Table ${a.table_number}${a.team_name ? ' — ' + a.team_name : ''}: "${a.value}"` +
-        (a.is_correct === null ? '' : a.is_correct ? ' (marked correct)' : ' (marked incorrect)');
-      row.appendChild(label);
-
+      const yesNoRow = document.createElement('div');
+      yesNoRow.style.display = 'flex';
+      yesNoRow.style.gap = 'var(--s3)';
       const yes = document.createElement('button');
       yes.type = 'button';
-      yes.textContent = 'Correct';
+      yes.className = 'btn wide';
+      yes.style.color = 'var(--correct)';
+      yes.style.background = 'transparent';
+      yes.style.borderColor = 'var(--correct)';
+      yes.append('Correct ', Object.assign(document.createElement('kbd'), { textContent: 'Y' }));
       yes.addEventListener('click', () => mark(questionId, a.team_id, true));
-      row.appendChild(yes);
-
       const no = document.createElement('button');
       no.type = 'button';
-      no.textContent = 'Wrong';
+      no.className = 'btn wide';
+      no.style.color = 'var(--wrong)';
+      no.style.background = 'transparent';
+      no.style.borderColor = 'var(--wrong)';
+      no.append('Wrong ', Object.assign(document.createElement('kbd'), { textContent: 'N' }));
       no.addEventListener('click', () => mark(questionId, a.team_id, false));
-      row.appendChild(no);
+      yesNoRow.append(yes, no);
+      cbody.appendChild(yesNoRow);
 
       const alias = document.createElement('button');
       alias.type = 'button';
-      alias.textContent = 'Accept spelling for all';
+      alias.className = 'btn ghost wide';
+      alias.style.marginTop = 'var(--s3)';
+      alias.append('Accept this spelling for every table ', Object.assign(document.createElement('kbd'), { textContent: 'A' }));
       alias.addEventListener('click', () => addAlias(questionId, a.value));
-      row.appendChild(alias);
+      cbody.appendChild(alias);
 
-      list.appendChild(row);
-    });
+      const aliasNote = document.createElement('p');
+      aliasNote.className = 'note';
+      aliasNote.textContent = 'Applies to all tables and re-scores. Confirmed before it lands.';
+      cbody.appendChild(aliasNote);
+
+      markerCurrentAnswer = { questionId, teamId: a.team_id, value: a.value };
+    }
+
+    const rule = document.createElement('hr');
+    rule.className = 'rule';
+    cbody.appendChild(rule);
 
     const done = document.createElement('button');
     done.type = 'button';
+    done.className = 'btn ghost wide';
     done.textContent = 'Back to queue';
     done.addEventListener('click', async () => {
+      window.removeEventListener('keydown', markerKeydown);
+      markerKeydownAttached = false;
       await fetch('/marker/release', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -588,10 +891,32 @@
       });
       startMarker();
     });
-    app.appendChild(done);
+    cbody.appendChild(done);
+
+    if (!markerKeydownAttached) {
+      window.addEventListener('keydown', markerKeydown);
+      markerKeydownAttached = true;
+    }
+  }
+
+  // One shared listener across re-renders of the detail view (a mark
+  // re-fetches and re-renders in place) — guarded the same way as the host
+  // shortcuts, and always acting on whichever answer is currently on screen.
+  let markerCurrentAnswer = null;
+  let markerKeydownAttached = false;
+  function markerKeydown(e) {
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!markerCurrentAnswer) return;
+    const { questionId, teamId, value } = markerCurrentAnswer;
+    if (e.key === 'y' || e.key === 'Y') mark(questionId, teamId, true);
+    else if (e.key === 'n' || e.key === 'N') mark(questionId, teamId, false);
+    else if (e.key === 'a' || e.key === 'A') addAlias(questionId, value);
   }
 
   async function mark(questionId, teamId, correct) {
+    markerCurrentAnswer = null;
     await fetch('/marker/mark', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -601,6 +926,7 @@
   }
 
   async function addAlias(questionId, alias) {
+    markerCurrentAnswer = null;
     await fetch('/marker/alias', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -615,9 +941,16 @@
 
   function startAdmin() {
     clear(app);
-    const heading = document.createElement('h1');
+    app.style.padding = '';
+    const cbody = document.createElement('div');
+    cbody.className = 'cbody';
+    app.appendChild(cbody);
+    adminBody = cbody;
+
+    const heading = document.createElement('div');
+    heading.className = 'label';
     heading.textContent = 'Admin';
-    app.appendChild(heading);
+    cbody.appendChild(heading);
 
     buildEventsSection();
     buildQuestionsSection();
@@ -629,22 +962,26 @@
     buildBackupSection();
   }
 
+  let adminBody = null;
+
   // --- events: many configured, exactly one active (technical-design §16.5) --
 
   function buildEventsSection() {
     section('Events');
 
     const nameInput = document.createElement('input');
+    nameInput.className = 'field';
     nameInput.placeholder = 'New event name';
     const createBtn = document.createElement('button');
     createBtn.type = 'button';
+    createBtn.className = 'btn ghost';
     createBtn.textContent = 'New event (draft)';
     const msg = document.createElement('p');
     msg.className = 'error';
     msg.setAttribute('role', 'alert');
 
     const list = document.createElement('div');
-    list.className = 'question-list';
+    list.className = 'stack';
 
     async function refreshEvents() {
       const res = await fetch('/admin/events', { cache: 'no-store' });
@@ -652,7 +989,7 @@
       clear(list);
       data.events.forEach((e) => {
         const row = document.createElement('div');
-        row.className = 'question-row';
+        row.className = 'tile flat' + (e.status === 'active' ? ' seated' : '');
         const label = document.createElement('span');
         const current = e.id === data.current_event_id ? ' — this session' : '';
         label.textContent = `${e.name} — ${e.status} — ${e.question_count} questions, ${e.table_count} tables${current}`;
@@ -661,6 +998,8 @@
         if (e.status !== 'active' && e.id === data.current_event_id) {
           const activateBtn = document.createElement('button');
           activateBtn.type = 'button';
+          activateBtn.className = 'btn sm';
+          activateBtn.style.marginLeft = 'auto';
           activateBtn.textContent = 'Activate';
           activateBtn.addEventListener('click', async () => {
             const res2 = await fetch(`/admin/events/${e.id}/activate`, { method: 'POST' });
@@ -673,6 +1012,8 @@
         if (e.status === 'active' && e.id === data.current_event_id) {
           const finishBtn = document.createElement('button');
           finishBtn.type = 'button';
+          finishBtn.className = 'btn ghost sm';
+          finishBtn.style.marginLeft = 'auto';
           finishBtn.textContent = 'Finish event';
           finishBtn.addEventListener('click', async () => {
             await fetch(`/admin/events/${e.id}/finish`, { method: 'POST' });
@@ -700,18 +1041,23 @@
       }
     });
 
-    app.append(nameInput, createBtn, msg, list);
+    adminBody.append(nameInput, createBtn, msg, list);
     refreshEvents();
   }
 
   function section(title) {
-    const h = document.createElement('h1');
+    const rule = document.createElement('hr');
+    rule.className = 'rule';
+    const h = document.createElement('div');
+    h.className = 'label';
+    h.style.marginBottom = 'var(--s2)';
     h.textContent = title;
-    app.appendChild(h);
+    adminBody.append(rule, h);
   }
 
   function fileNameInput(accept) {
     const input = document.createElement('input');
+    input.className = 'field';
     input.type = 'file';
     if (accept) input.accept = accept;
     return input;
@@ -725,15 +1071,17 @@
     const fileInput = fileNameInput('.csv');
     const previewBtn = document.createElement('button');
     previewBtn.type = 'button';
+    previewBtn.className = 'btn ghost';
     previewBtn.textContent = 'Preview CSV';
     const importBtn = document.createElement('button');
     importBtn.type = 'button';
+    importBtn.className = 'btn';
     importBtn.textContent = 'Import (replaces the whole set)';
     const msg = document.createElement('p');
     msg.className = 'error';
     msg.setAttribute('role', 'alert');
     const previewList = document.createElement('div');
-    previewList.className = 'question-list';
+    previewList.className = 'stack';
 
     async function withCsvText(fn) {
       if (!fileInput.files[0]) { msg.textContent = 'Choose a CSV file first.'; return; }
@@ -745,14 +1093,16 @@
       clear(previewList);
       result.rows.forEach((row) => {
         const line = document.createElement('div');
-        line.className = 'question-row';
+        line.className = 'tile flat';
+        line.style.flexDirection = 'column';
+        line.style.alignItems = 'flex-start';
         const label = document.createElement('span');
         label.textContent = `Row ${row.rowNumber}: ${row.prompt || '(no prompt)'}`;
         line.appendChild(label);
         if (row.errors.length) {
           const err = document.createElement('span');
-          err.className = 'error';
-          err.textContent = 'ERROR: ' + row.errors.join('; ');
+          err.className = 'status bad';
+          err.textContent = row.errors.join('; ');
           line.appendChild(err);
         }
         if (row.warnings.length) {
@@ -786,10 +1136,12 @@
       if (res.ok) refreshQuestionsList();
     }));
 
-    const listHeading = document.createElement('p');
-    listHeading.textContent = 'Current question set:';
+    const listHeading = document.createElement('div');
+    listHeading.className = 'label';
+    listHeading.style.margin = 'var(--s4) 0 var(--s2)';
+    listHeading.textContent = 'Current question set';
     const list = document.createElement('div');
-    list.className = 'question-list';
+    list.className = 'stack';
 
     async function refreshQuestionsList() {
       const res = await fetch('/admin/questions', { cache: 'no-store' });
@@ -797,7 +1149,7 @@
       clear(list);
       data.questions.forEach((qu) => {
         const row = document.createElement('div');
-        row.className = 'question-row';
+        row.className = 'tile flat';
         const label = document.createElement('span');
         const where = qu.is_practice ? 'Practice' : qu.is_reserve ? 'Reserve' : `R${qu.round} Q${qu.order_no}`;
         label.textContent = `${where}: ${qu.prompt} — answer: ${qu.correct_answer} (${qu.points}pt, ${qu.type})`;
@@ -805,6 +1157,8 @@
 
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
+        editBtn.className = 'btn ghost sm';
+        editBtn.style.marginLeft = 'auto';
         editBtn.textContent = 'Edit';
         editBtn.addEventListener('click', () => openQuestionEditor(qu.id));
         row.appendChild(editBtn);
@@ -814,7 +1168,7 @@
     }
 
     const editorWrap = document.createElement('div');
-    editorWrap.className = 'question-list';
+    editorWrap.className = 'stack';
 
     async function openQuestionEditor(id) {
       const res = await fetch(`/admin/questions/${id}`, { cache: 'no-store' });
@@ -840,21 +1194,27 @@
       editorWrap.appendChild(warn);
 
       const promptInput = document.createElement('input');
+      promptInput.className = 'field';
       promptInput.value = qu.prompt;
       const correctInput = document.createElement('input');
+      correctInput.className = 'field';
       correctInput.value = qu.correct_answer || '';
       const aliasesInput = document.createElement('input');
+      aliasesInput.className = 'field';
       aliasesInput.placeholder = 'Aliases, pipe-separated';
       aliasesInput.value = (qu.aliases || []).join('|');
       const pointsInput = document.createElement('input');
+      pointsInput.className = 'field';
       pointsInput.type = 'number';
       pointsInput.value = qu.points;
 
       const previewBtn = document.createElement('button');
       previewBtn.type = 'button';
+      previewBtn.className = 'btn ghost';
       previewBtn.textContent = 'Preview impact';
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
+      saveBtn.className = 'btn';
       saveBtn.textContent = 'Save';
       const msg = document.createElement('p');
       msg.className = 'error';
@@ -907,7 +1267,7 @@
       );
     }
 
-    app.append(fileInput, previewBtn, importBtn, msg, previewList, listHeading, list, editorWrap);
+    adminBody.append(fileInput, previewBtn, importBtn, msg, previewList, listHeading, list, editorWrap);
     refreshQuestionsList();
   }
 
@@ -919,13 +1279,14 @@
     const fileInput = fileNameInput('.csv');
     const importBtn = document.createElement('button');
     importBtn.type = 'button';
+    importBtn.className = 'btn ghost';
     importBtn.textContent = 'Import tables CSV (adds/updates only)';
     const msg = document.createElement('p');
     msg.className = 'error';
     msg.setAttribute('role', 'alert');
 
     const list = document.createElement('div');
-    list.className = 'question-list';
+    list.className = 'stack';
 
     async function refreshTables() {
       const res = await fetch('/admin/tables', { cache: 'no-store' });
@@ -933,13 +1294,15 @@
       clear(list);
       data.tables.forEach((t) => {
         const row = document.createElement('div');
-        row.className = 'question-row';
+        row.className = 'tile flat';
         const label = document.createElement('span');
         label.textContent = `Table ${t.table_number} — ${t.seats} seats${t.archived ? ' (archived)' : ''}`;
         row.appendChild(label);
         if (!t.archived) {
           const archiveBtn = document.createElement('button');
           archiveBtn.type = 'button';
+          archiveBtn.className = 'btn ghost sm';
+          archiveBtn.style.marginLeft = 'auto';
           archiveBtn.textContent = 'Archive';
           archiveBtn.addEventListener('click', async () => {
             await fetch(`/admin/tables/${t.id}/archive`, { method: 'POST' });
@@ -966,10 +1329,11 @@
 
     const qrBtn = document.createElement('button');
     qrBtn.type = 'button';
+    qrBtn.className = 'btn ghost';
     qrBtn.textContent = 'Print QR sheet';
     qrBtn.addEventListener('click', () => window.open('/admin/tables/qr-sheet', '_blank'));
 
-    app.append(fileInput, importBtn, msg, qrBtn, list);
+    adminBody.append(fileInput, importBtn, msg, qrBtn, list);
     refreshTables();
   }
 
@@ -980,16 +1344,18 @@
 
     const fileInput = fileNameInput('image/*');
     const nameInput = document.createElement('input');
+    nameInput.className = 'field';
     nameInput.placeholder = 'Filename as referenced in the CSV (e.g. opera-house.jpg)';
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
+    uploadBtn.className = 'btn ghost';
     uploadBtn.textContent = 'Upload';
     const msg = document.createElement('p');
     msg.className = 'error';
     msg.setAttribute('role', 'alert');
 
     const list = document.createElement('div');
-    list.className = 'question-list';
+    list.className = 'stack';
 
     async function refreshMedia() {
       const res = await fetch('/admin/media', { cache: 'no-store' });
@@ -997,7 +1363,7 @@
       clear(list);
       data.files.forEach((f) => {
         const row = document.createElement('div');
-        row.className = 'question-row';
+        row.className = 'tile flat';
         const label = document.createElement('span');
         label.textContent = `${f.filename} → /media/${f.sha256}.webp`;
         row.appendChild(label);
@@ -1021,7 +1387,7 @@
       if (res.ok) refreshMedia();
     });
 
-    app.append(fileInput, nameInput, uploadBtn, msg, list);
+    adminBody.append(fileInput, nameInput, uploadBtn, msg, list);
     refreshMedia();
   }
 
@@ -1032,10 +1398,12 @@
 
     const exportBtn = document.createElement('button');
     exportBtn.type = 'button';
+    exportBtn.className = 'btn ghost';
     exportBtn.textContent = 'Export config (JSON)';
     const fileInput = fileNameInput('.json');
     const importBtn = document.createElement('button');
     importBtn.type = 'button';
+    importBtn.className = 'btn ghost';
     importBtn.textContent = 'Import as new event (draft)';
     const msg = document.createElement('p');
     msg.className = 'error';
@@ -1076,7 +1444,9 @@
         : `Could not import: ${data.error}`;
     });
 
-    app.append(exportBtn, document.createElement('br'), fileInput, importBtn, msg);
+    const configRule = document.createElement('hr');
+    configRule.className = 'rule';
+    adminBody.append(exportBtn, configRule, fileInput, importBtn, msg);
   }
 
   // --- audit log (dispute evidence, CLAUDE.md Conventions) ----------------
@@ -1085,9 +1455,11 @@
     section('Audit log');
 
     const list = document.createElement('div');
-    list.className = 'question-list';
+    list.className = 'stack';
     const refreshBtn = document.createElement('button');
     refreshBtn.type = 'button';
+    refreshBtn.className = 'btn ghost sm';
+    refreshBtn.style.marginBottom = 'var(--s3)';
     refreshBtn.textContent = 'Refresh audit log';
 
     async function refreshAudit() {
@@ -1096,7 +1468,7 @@
       clear(list);
       data.entries.slice(0, 50).forEach((e) => {
         const row = document.createElement('div');
-        row.className = 'question-row';
+        row.className = 'tile flat';
         const label = document.createElement('span');
         label.textContent = `${e.at} — ${e.role}${e.operator ? '/' + e.operator : ''}: ${e.action} ${e.target || ''} ${e.reason ? '(' + e.reason + ')' : ''}`;
         row.appendChild(label);
@@ -1105,7 +1477,7 @@
     }
 
     refreshBtn.addEventListener('click', refreshAudit);
-    app.append(refreshBtn, list);
+    adminBody.append(refreshBtn, list);
     refreshAudit();
   }
 
@@ -1117,6 +1489,7 @@
     section('Theme');
 
     const levelSelect = document.createElement('select');
+    levelSelect.className = 'field';
     ['event', 'round', 'question'].forEach((lv) => {
       const opt = document.createElement('option');
       opt.value = lv; opt.textContent = lv[0].toUpperCase() + lv.slice(1);
@@ -1124,6 +1497,7 @@
     });
 
     const targetInput = document.createElement('input');
+    targetInput.className = 'field';
     targetInput.placeholder = 'Round number or question id';
     targetInput.style.display = 'none';
     levelSelect.addEventListener('change', () => {
@@ -1138,6 +1512,7 @@
     const accentInput = document.createElement('input'); accentInput.type = 'color'; accentInput.value = '#e0a82e';
     const layoutOverride = document.createElement('input'); layoutOverride.type = 'checkbox';
     const layoutSelect = document.createElement('select');
+    layoutSelect.className = 'field';
     LAYOUTS.forEach((l) => {
       const opt = document.createElement('option');
       opt.value = l; opt.textContent = l;
@@ -1146,6 +1521,7 @@
 
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
+    saveBtn.className = 'btn ghost';
     saveBtn.textContent = 'Save theme for this level';
     const msg = document.createElement('p');
     msg.className = 'error';
@@ -1171,28 +1547,38 @@
       refreshResolved();
     });
 
-    app.append(
-      levelSelect, targetInput,
-      document.createElement('br'),
-      layoutOverride, document.createTextNode(' Layout '), layoutSelect,
-      document.createElement('br'),
+    const themeRow1 = document.createElement('div');
+    themeRow1.style.display = 'flex';
+    themeRow1.style.alignItems = 'center';
+    themeRow1.style.gap = 'var(--s2)';
+    themeRow1.append(layoutOverride, document.createTextNode(' Layout '), layoutSelect);
+    const themeRow2 = document.createElement('div');
+    themeRow2.style.display = 'flex';
+    themeRow2.style.alignItems = 'center';
+    themeRow2.style.gap = 'var(--s2)';
+    themeRow2.style.flexWrap = 'wrap';
+    themeRow2.append(
       bgOverride, document.createTextNode(' Background '), bgInput,
       bg2Override, document.createTextNode(' Gradient end '), bg2Input,
-      accentOverride, document.createTextNode(' Accent '), accentInput,
-      document.createElement('br'),
-      saveBtn, msg
+      accentOverride, document.createTextNode(' Accent '), accentInput
     );
+    adminBody.append(levelSelect, targetInput, themeRow1, themeRow2, saveBtn, msg);
 
     // Chrome — event level only, deliberately outside the cascade (CLAUDE.md #20).
-    const chromeHeading = document.createElement('p');
+    const chromeRule = document.createElement('hr');
+    chromeRule.className = 'rule';
+    const chromeHeading = document.createElement('div');
+    chromeHeading.className = 'label';
+    chromeHeading.style.marginBottom = 'var(--s2)';
     chromeHeading.textContent = 'Chrome (event only, does not cascade)';
-    const titleInput = document.createElement('input'); titleInput.placeholder = 'Title';
-    const subtitleInput = document.createElement('input'); subtitleInput.placeholder = 'Subtitle';
-    const logoLightInput = document.createElement('input'); logoLightInput.placeholder = 'Logo filename (light bg)';
-    const logoDarkInput = document.createElement('input'); logoDarkInput.placeholder = 'Logo filename (dark bg)';
-    const footerInput = document.createElement('input'); footerInput.placeholder = 'Footer band text';
+    const titleInput = document.createElement('input'); titleInput.className = 'field'; titleInput.placeholder = 'Title';
+    const subtitleInput = document.createElement('input'); subtitleInput.className = 'field'; subtitleInput.placeholder = 'Subtitle';
+    const logoLightInput = document.createElement('input'); logoLightInput.className = 'field'; logoLightInput.placeholder = 'Logo filename (light bg)';
+    const logoDarkInput = document.createElement('input'); logoDarkInput.className = 'field'; logoDarkInput.placeholder = 'Logo filename (dark bg)';
+    const footerInput = document.createElement('input'); footerInput.className = 'field'; footerInput.placeholder = 'Footer band text';
     const chromeSaveBtn = document.createElement('button');
     chromeSaveBtn.type = 'button';
+    chromeSaveBtn.className = 'btn ghost';
     chromeSaveBtn.textContent = 'Save chrome';
     chromeSaveBtn.addEventListener('click', async () => {
       await fetch('/admin/theme/chrome', {
@@ -1205,25 +1591,55 @@
         })
       });
     });
-    app.append(
-      chromeHeading, titleInput, subtitleInput, logoLightInput, logoDarkInput, footerInput, chromeSaveBtn
+    adminBody.append(
+      chromeRule, chromeHeading, titleInput, subtitleInput, logoLightInput, logoDarkInput, footerInput, chromeSaveBtn
     );
+
+    // Preview — back of the room, at the scale it'll actually be judged at
+    // (design-handover: aTheme, "if it fails here, it fails on the night").
+    // Shows the event default; a round/question override still needs the
+    // resolved-themes list below to confirm nothing downstream broke.
+    const previewLabel = document.createElement('div');
+    previewLabel.className = 'label';
+    previewLabel.style.margin = 'var(--s4) 0 var(--s2)';
+    previewLabel.textContent = 'Preview — back of the room';
+    const preview = document.createElement('div');
+    preview.className = 'bigscreen-preview';
+    const previewInner = document.createElement('div');
+    const previewEyebrow = document.createElement('div');
+    previewEyebrow.className = 's-eyebrow';
+    previewEyebrow.textContent = 'Round 1 · Q4';
+    const previewPrompt = document.createElement('div');
+    previewPrompt.className = 's-prompt';
+    previewPrompt.textContent = 'Which Australian city hosted the 2000 Olympics?';
+    previewInner.append(previewEyebrow, previewPrompt);
+    preview.appendChild(previewInner);
+    adminBody.append(previewLabel, preview);
+
+    function renderPreview(resolved) {
+      const c = resolved.colour;
+      preview.style.setProperty('--bg', c.bg);
+      preview.style.setProperty('--bg2', c.bg2);
+      preview.style.setProperty('--text', c.text);
+      preview.style.setProperty('--accent', c.accent);
+    }
 
     // Resolved + validated (CLAUDE.md #21) — the client never sees the
     // cascade, only this already-resolved result.
     const resolvedHeading = document.createElement('p');
     resolvedHeading.textContent = 'Resolved themes';
     const resolvedList = document.createElement('div');
-    resolvedList.className = 'question-list';
-    app.append(resolvedHeading, resolvedList);
+    resolvedList.className = 'stack';
+    adminBody.append(resolvedHeading, resolvedList);
 
     async function refreshResolved() {
       const res = await fetch('/admin/theme', { cache: 'no-store' });
       const data = await res.json();
+      renderPreview(data.event_default.resolved);
       clear(resolvedList);
 
       const summary = document.createElement('div');
-      summary.className = 'question-row';
+      summary.className = 'notice ' + (data.event_default.validation.pass ? 'ok' : 'bad');
       const failingQuestions = data.questions.filter((r) => !r.validation.pass);
       summary.textContent = `Event default: ${data.event_default.validation.pass ? 'pass' : 'FAIL'} — ` +
         `${data.questions.length - failingQuestions.length}/${data.questions.length} questions pass`;
@@ -1231,7 +1647,7 @@
 
       failingQuestions.forEach((r) => {
         const row = document.createElement('div');
-        row.className = 'question-row';
+        row.className = 'notice bad';
         const failed = r.validation.checks.filter((c) => !c.pass).map((c) => `${c.label} (${c.ratio}:1, needs ${c.required}:1)`);
         row.textContent = `Q${r.order_no ?? r.question_id}: ${failed.join('; ')}`;
         resolvedList.appendChild(row);
@@ -1248,6 +1664,7 @@
 
     const btn = document.createElement('button');
     btn.type = 'button';
+    btn.className = 'btn ghost';
     btn.textContent = 'Download database backup';
     btn.addEventListener('click', () => {
       window.location.href = '/admin/backup/database';
@@ -1255,12 +1672,13 @@
 
     const resultsBtn = document.createElement('button');
     resultsBtn.type = 'button';
+    resultsBtn.className = 'btn ghost';
     resultsBtn.textContent = 'Export results (CSV)';
     resultsBtn.addEventListener('click', () => {
       window.location.href = '/admin/results/export';
     });
 
-    app.append(btn, resultsBtn);
+    adminBody.append(btn, resultsBtn);
   }
 
   // --- floor console -------------------------------------------------
@@ -1275,26 +1693,44 @@
 
   function startFloor() {
     clear(app);
+    app.style.padding = '';
     floorEls = {};
 
-    const heading = document.createElement('h1');
-    heading.textContent = 'Floor';
-    app.appendChild(heading);
+    const cbody = document.createElement('div');
+    cbody.className = 'cbody';
+    app.appendChild(cbody);
 
-    const summary = document.createElement('p');
-    app.appendChild(summary);
+    const summaryRow = document.createElement('div');
+    summaryRow.style.display = 'flex';
+    summaryRow.style.justifyContent = 'space-between';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = 'Tables';
+    const summary = document.createElement('span');
+    summary.className = 'label num';
+    summaryRow.append(label, summary);
+    cbody.appendChild(summaryRow);
     floorEls.summary = summary;
 
     const grid = document.createElement('div');
-    grid.className = 'question-list';
-    app.appendChild(grid);
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(64px, 1fr))';
+    grid.style.gap = 'var(--s2)';
+    grid.style.margin = 'var(--s2) 0 var(--s4)';
+    cbody.appendChild(grid);
     floorEls.grid = grid;
 
-    const attentionHeading = document.createElement('p');
+    const rule = document.createElement('hr');
+    rule.className = 'rule';
+    cbody.appendChild(rule);
+
+    const attentionHeading = document.createElement('div');
+    attentionHeading.className = 'label';
+    attentionHeading.style.marginBottom = 'var(--s2)';
     attentionHeading.textContent = 'Needs attention';
     const attention = document.createElement('div');
-    attention.className = 'question-list';
-    app.append(attentionHeading, attention);
+    attention.className = 'stack';
+    cbody.append(attentionHeading, attention);
     floorEls.attention = attention;
 
     refreshFloor();
@@ -1317,22 +1753,32 @@
   }
 
   function renderFloor(state) {
+    applyTheme(state.theme);
     const teams = state.teams;
     const statuses = teams.map((t) => ({ t, status: presenceStatus(t, state.question_open) }));
     const answeredCount = teams.filter((t) => t.answered_current).length;
 
     floorEls.summary.textContent = state.question_open
-      ? `${answeredCount} of ${teams.length} answering`
-      : 'No question open';
+      ? `${answeredCount} answering`
+      : 'no question open';
 
     clear(floorEls.grid);
     statuses.forEach(({ t, status }) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.textContent = `${t.table_number}${status !== 'ok' ? ` (${status})` : ''}`;
+      btn.className = 'tile';
+      btn.style.justifyContent = 'center';
+      // Team colour identifies the table, never a correctness signal on
+      // this surface (CLAUDE.md #16/#18) — a small accent, not a status.
       if (t.colour) {
-        btn.style.borderLeftWidth = '6px';
+        btn.style.borderLeftWidth = '4px';
         btn.style.borderLeftColor = t.colour.from;
+      }
+      btn.textContent = String(t.table_number);
+      if (status !== 'ok') {
+        const dot = document.createElement('span');
+        dot.className = 'status ' + (status === 'offline' ? 'bad' : 'wait');
+        btn.appendChild(dot);
       }
       btn.addEventListener('click', () => openFloorTable(t.team_id));
       floorEls.grid.appendChild(btn);
@@ -1347,16 +1793,20 @@
       floorEls.attention.appendChild(p);
     }
     needsAttention.forEach(({ t, status }) => {
-      const row = document.createElement('div');
-      row.className = 'question-row';
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'tile';
+
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = String(t.table_number);
       const label = document.createElement('span');
-      label.textContent = `Table ${t.table_number} — ${status === 'offline' ? 'offline' : 'quiet, not answered yet'}`;
-      row.appendChild(label);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = 'Open';
-      btn.addEventListener('click', () => openFloorTable(t.team_id));
-      row.appendChild(btn);
+      label.textContent = status === 'offline' ? 'Offline' : 'No answer this round';
+      const mark = document.createElement('span');
+      mark.className = 'mark status ' + (status === 'offline' ? 'bad' : 'wait');
+      mark.textContent = status === 'offline' ? 'Down' : 'Quiet';
+      row.append(chip, label, mark);
+      row.addEventListener('click', () => openFloorTable(t.team_id));
       floorEls.attention.appendChild(row);
     });
   }
@@ -1364,25 +1814,43 @@
   async function openFloorTable(teamId) {
     if (floorPollHandle) floorPollHandle.stop();
     clear(app);
+    app.style.padding = '';
 
     const res = await fetch(`/floor/team/${teamId}`, { cache: 'no-store' });
     if (!res.ok) { startFloor(); return; }
     const data = await res.json();
+    applyTheme(data.theme);
 
-    const heading = document.createElement('h1');
-    heading.textContent = `Table ${data.team.table_number}${data.team.team_name ? ' — ' + data.team.team_name : ''}`;
-    app.appendChild(heading);
+    const band = document.createElement('div');
+    band.className = 'band';
+    const name = document.createElement('span');
+    name.textContent = data.team.team_name || '';
+    const tableNo = document.createElement('span');
+    tableNo.className = 'table-no num';
+    tableNo.textContent = `Table ${data.team.table_number}`;
+    band.append(name, tableNo);
+    app.appendChild(band);
 
-    const info = document.createElement('p');
-    info.className = 'note';
+    const cbody = document.createElement('div');
+    cbody.className = 'cbody';
+    app.appendChild(cbody);
+
+    const info = document.createElement('div');
+    info.className = 'tile flat';
     info.textContent = `Players: ${data.players.map((p) => p.username).join(', ') || 'none yet'}`;
-    app.appendChild(info);
+    cbody.appendChild(info);
+
+    const stack = document.createElement('div');
+    stack.className = 'stack';
+    stack.style.marginTop = 'var(--s3)';
 
     const renameInput = document.createElement('input');
+    renameInput.className = 'field';
     renameInput.placeholder = 'New team name';
     renameInput.value = data.team.team_name || '';
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
+    renameBtn.className = 'btn ghost wide';
     renameBtn.textContent = 'Rename team';
     renameBtn.addEventListener('click', async () => {
       await fetch('/floor/rename', {
@@ -1393,6 +1861,7 @@
     });
 
     const captainSelect = document.createElement('select');
+    captainSelect.className = 'field';
     data.players.forEach((p) => {
       const opt = document.createElement('option');
       opt.value = p.id;
@@ -1401,6 +1870,7 @@
     });
     const captainBtn = document.createElement('button');
     captainBtn.type = 'button';
+    captainBtn.className = 'btn ghost wide';
     captainBtn.textContent = 'Make captain';
     captainBtn.addEventListener('click', async () => {
       await fetch('/floor/reassign-captain', {
@@ -1410,17 +1880,27 @@
       openFloorTable(teamId);
     });
 
-    app.append(renameInput, renameBtn, document.createElement('br'), captainSelect, captainBtn);
+    stack.append(renameInput, renameBtn, captainSelect, captainBtn);
+    cbody.appendChild(stack);
 
     if (data.current_question) {
-      const qHeading = document.createElement('p');
-      qHeading.textContent = `Q: ${data.current_question.prompt}`;
-      app.appendChild(qHeading);
+      const rule = document.createElement('hr');
+      rule.className = 'rule';
+      cbody.appendChild(rule);
 
+      const qHeading = document.createElement('p');
+      qHeading.className = 'note';
+      qHeading.textContent = data.current_question.prompt;
+      cbody.appendChild(qHeading);
+
+      const answerStack = document.createElement('div');
+      answerStack.className = 'stack';
       const valueInput = document.createElement('input');
+      valueInput.className = 'field';
       valueInput.placeholder = 'What the table told you';
       const submitBtn = document.createElement('button');
       submitBtn.type = 'button';
+      submitBtn.className = 'btn ghost wide';
       submitBtn.textContent = 'Submit for this table';
       const msg = document.createElement('p');
       msg.className = 'error';
@@ -1437,14 +1917,20 @@
         msg.textContent = res2.ok ? 'Recorded.' : `Could not record: ${d2.error}`;
       });
 
-      app.append(valueInput, submitBtn, msg);
+      answerStack.append(valueInput, submitBtn, msg);
+      cbody.appendChild(answerStack);
     }
+
+    const backRule = document.createElement('hr');
+    backRule.className = 'rule';
+    cbody.appendChild(backRule);
 
     const back = document.createElement('button');
     back.type = 'button';
+    back.className = 'btn ghost wide';
     back.textContent = 'Back to room';
     back.addEventListener('click', startFloor);
-    app.appendChild(back);
+    cbody.appendChild(back);
   }
 
   renderRolePicker();
