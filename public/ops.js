@@ -323,7 +323,9 @@
     row.className = 'tile flat';
 
     const label = document.createElement('span');
-    label.textContent = qu.is_practice ? `Practice: ${qu.prompt}` : `R${qu.round} Q${qu.order_no}: ${qu.prompt}`;
+    label.textContent = qu.is_practice ? `Practice: ${qu.prompt}`
+      : qu.is_reserve ? `Reserve: ${qu.prompt}`
+      : `R${qu.round} Q${qu.order_no}: ${qu.prompt}`;
     row.appendChild(label);
 
     const isCurrent = state.current && state.current.id === qu.id;
@@ -563,6 +565,16 @@
     heading.textContent = 'All rounds complete';
     container.appendChild(heading);
 
+    // Sudden death (technical-design §12.1 step 4) — only appears when the
+    // top position is still tied after countback. Never picks a winner;
+    // just surfaces the tie and gives the host one-tap access to a reserve
+    // question via the same tile the main question list uses.
+    const suddenDeath = document.createElement('div');
+    suddenDeath.style.display = 'none';
+    suddenDeath.style.marginBottom = 'var(--s4)';
+    container.appendChild(suddenDeath);
+    hostEls.suddenDeath = suddenDeath;
+
     const list = document.createElement('div');
     list.className = 'lb';
     container.appendChild(list);
@@ -584,6 +596,33 @@
     const res = await fetch('/host/scores', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
+
+    clear(hostEls.suddenDeath);
+    if (data.sudden_death) {
+      hostEls.suddenDeath.style.display = '';
+      const names = data.sudden_death.tied_teams.map((t) => t.team_name).join(', ');
+      const notice = document.createElement('div');
+      notice.className = 'notice bad';
+      notice.textContent = `Tied for 1st: ${names} — run a reserve question to break it.`;
+      hostEls.suddenDeath.appendChild(notice);
+
+      const reserveQuestions = state.questions.filter((qu) => qu.is_reserve);
+      if (reserveQuestions.length) {
+        const reserveStack = document.createElement('div');
+        reserveStack.className = 'stack';
+        reserveStack.style.marginTop = 'var(--s3)';
+        reserveQuestions.forEach((qu) => reserveStack.appendChild(buildQuestionTile(qu, state)));
+        hostEls.suddenDeath.appendChild(reserveStack);
+      } else {
+        const none = document.createElement('p');
+        none.className = 'note';
+        none.textContent = 'No reserve questions in this set.';
+        hostEls.suddenDeath.appendChild(none);
+      }
+    } else {
+      hostEls.suddenDeath.style.display = 'none';
+    }
+
     clear(hostEls.finalList);
     data.scores.forEach((s, i) => {
       const row = document.createElement('div');

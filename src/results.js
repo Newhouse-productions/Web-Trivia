@@ -29,9 +29,11 @@ export function buildResultsCsv(db, eventId) {
     ].map(csvField).join(','));
   }
 
+  // Practice/reserve excluded, same as ops.js's getScores (technical-design
+  // §12.2) — kept in sync deliberately since both are "the final score."
   const scores = db.prepare(`
     SELECT t.table_number, t.team_name,
-           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
+           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 AND q.is_practice = 0 AND q.is_reserve = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
            COALESCE((SELECT SUM(points) FROM bonuses b WHERE b.team_id = t.id), 0) AS bonus_points
     FROM teams t
     LEFT JOIN answers a ON a.team_id = t.id

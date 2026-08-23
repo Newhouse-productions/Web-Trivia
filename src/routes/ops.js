@@ -78,13 +78,18 @@ export function registerOpsRoutes(app, { db, q }) {
   // (CLAUDE.md #13) — there is no running total to corrupt. Ties resolve by
   // countback, excluding bonuses deliberately (technical-design §12.1):
   // round 3, then round 2, then free-text questions answered correctly.
+  // Practice and reserve questions are excluded from every aggregate here
+  // (technical-design §12.2: "never counted in the points total") — round
+  // alone doesn't do this, since a reserve question run as sudden death has
+  // round = NULL but a practice question could in principle still collide
+  // with round 2/3 if authored carelessly.
   const getScores = db.prepare(`
     SELECT t.id AS team_id, t.table_number, t.team_name, t.colour,
-           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
+           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 AND q.is_practice = 0 AND q.is_reserve = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
            COALESCE((SELECT SUM(points) FROM bonuses b WHERE b.team_id = t.id), 0) AS bonus_points,
            COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 AND q.round = 3 THEN q.points ELSE 0 END), 0) AS round3_points,
            COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 AND q.round = 2 THEN q.points ELSE 0 END), 0) AS round2_points,
-           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.type = 'text' THEN 1 ELSE 0 END), 0) AS text_correct_count
+           COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.type = 'text' AND q.is_practice = 0 AND q.is_reserve = 0 THEN 1 ELSE 0 END), 0) AS text_correct_count
     FROM teams t
     LEFT JOIN answers a ON a.team_id = t.id
     LEFT JOIN questions q ON q.id = a.question_id
@@ -237,7 +242,7 @@ export function registerOpsRoutes(app, { db, q }) {
       tables_live: { live: getLiveCount.get(event.id, PRESENCE_WINDOW_MS).n, total: getTeamCount.get(event.id).n },
       questions: questions.map((qu) => ({
         id: qu.id, round: qu.round, order_no: qu.order_no, type: qu.type,
-        prompt: qu.prompt, points: qu.points, is_practice: !!qu.is_practice
+        prompt: qu.prompt, points: qu.points, is_practice: !!qu.is_practice, is_reserve: !!qu.is_reserve
       })),
       preflight: phase === 'preflight' ? {
         question_count: questions.length,
@@ -411,7 +416,8 @@ export function registerOpsRoutes(app, { db, q }) {
     const event = q.getEventById.get(ops.eventId);
     if (!event || event.status !== 'active') return reply.code(409).send({ error: 'event_not_running' });
 
-    const scores = getScores.all(event.id).map((r) => ({
+    const rows = getScores.all(event.id);
+    const scores = rows.map((r) => ({
       team_id: r.team_id,
       table_number: r.table_number,
       team_name: r.team_name || `Table ${r.table_number}`,
@@ -419,7 +425,34 @@ export function registerOpsRoutes(app, { db, q }) {
       score: r.answer_points + r.bonus_points
     }));
 
-    return { scores, recent_bonuses: getRecentBonuses.all(event.id) };
+    // Sudden death (technical-design §12.1 step 4): countback is
+    // deterministic through round 3, round 2, then correct-free-text-count;
+    // if the top position is STILL tied after all three, the host runs a
+    // reserve question. This only detects and surfaces the tie — it never
+    // picks a winner, and bonuses are excluded from the countback
+    // comparison itself even though they're part of the headline score
+    // that made them tied in the first place (§12.1: "not evidence of quiz
+    // ability").
+    let suddenDeath = null;
+    if (rows.length >= 2) {
+      const top = rows[0];
+      const topTotal = top.answer_points + top.bonus_points;
+      const tied = rows.filter((r) =>
+        (r.answer_points + r.bonus_points) === topTotal &&
+        r.round3_points === top.round3_points &&
+        r.round2_points === top.round2_points &&
+        r.text_correct_count === top.text_correct_count
+      );
+      if (tied.length >= 2) {
+        suddenDeath = {
+          tied_teams: tied.map((r) => ({
+            team_id: r.team_id, table_number: r.table_number, team_name: r.team_name || `Table ${r.table_number}`
+          }))
+        };
+      }
+    }
+
+    return { scores, recent_bonuses: getRecentBonuses.all(event.id), sudden_death: suddenDeath };
   });
 
   // Same CSV as the admin export (src/results.js) — the host's own session
