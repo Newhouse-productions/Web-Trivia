@@ -10,7 +10,7 @@ import { readOpsSession, writeOpsSession } from '../opsSession.js';
 import { makeAuditLogger } from '../audit.js';
 import { parseQuestionsCsv } from '../import/questionsCsv.js';
 import { randomToken, randomPin } from '../tokens.js';
-import { LAYOUTS } from '../theme.js';
+import { LAYOUTS, validateContrast } from '../theme.js';
 import { buildResultsCsv } from '../results.js';
 
 function escapeHtml(s) {
@@ -576,6 +576,34 @@ export function registerAdminRoutes(app, { db, q }) {
     const event = requireAdmin(req, reply);
     if (!event) return;
     return q.allResolvedThemes(event.id);
+  });
+
+  // Live preview for whichever level/target the theme editor currently has
+  // selected — previously the preview only ever showed the event default,
+  // even while editing a round or question. Resolved server-side from
+  // already-saved data, same principle as everywhere else theme is
+  // resolved (CLAUDE.md #21): the client never re-derives the cascade.
+  app.get('/admin/theme/preview', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    const level = String(req.query?.level || 'event');
+
+    let resolved;
+    if (level === 'event') {
+      resolved = q.resolveCurrentTheme(event, null);
+    } else if (level === 'round') {
+      const roundNumber = Number(req.query?.target);
+      if (!Number.isInteger(roundNumber)) return reply.code(400).send({ error: 'invalid_target' });
+      resolved = q.resolveRoundTheme(event, roundNumber);
+    } else if (level === 'question') {
+      const question = q.getQuestionById.get(Number(req.query?.target));
+      if (!question || question.event_id !== event.id) return reply.code(404).send({ error: 'not_found' });
+      resolved = q.resolveCurrentTheme(event, question);
+    } else {
+      return reply.code(400).send({ error: 'invalid_level' });
+    }
+
+    return { resolved, validation: validateContrast(resolved.colour) };
   });
 
   app.put('/admin/theme/event', async (req, reply) => {

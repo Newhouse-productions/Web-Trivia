@@ -1931,7 +1931,9 @@
     targetInput.style.display = 'none';
     levelSelect.addEventListener('change', () => {
       targetInput.style.display = levelSelect.value === 'event' ? 'none' : '';
+      refreshPreview();
     });
+    targetInput.addEventListener('input', () => refreshPreview());
 
     const bgOverride = document.createElement('input'); bgOverride.type = 'checkbox';
     const bgInput = document.createElement('input'); bgInput.type = 'color'; bgInput.value = '#1a1d24';
@@ -1974,6 +1976,7 @@
       const data = await res.json();
       msg.textContent = res.ok ? 'Saved.' : `Could not save: ${data.error}`;
       refreshResolved();
+      refreshPreview();
     });
 
     const themeRow1 = document.createElement('div');
@@ -2026,8 +2029,8 @@
 
     // Preview — back of the room, at the scale it'll actually be judged at
     // (design-handover: aTheme, "if it fails here, it fails on the night").
-    // Shows the event default; a round/question override still needs the
-    // resolved-themes list below to confirm nothing downstream broke.
+    // Live-updates for whichever level/target is selected above, resolved
+    // server-side (CLAUDE.md #21) — the client never re-derives the cascade.
     const previewLabel = document.createElement('div');
     previewLabel.className = 'label';
     previewLabel.style.margin = 'var(--s4) 0 var(--s2)';
@@ -2043,7 +2046,10 @@
     previewPrompt.textContent = 'Which Australian city hosted the 2000 Olympics?';
     previewInner.append(previewEyebrow, previewPrompt);
     preview.appendChild(previewInner);
-    adminBody.append(previewLabel, preview);
+    const previewMsg = document.createElement('div');
+    previewMsg.className = 'notice';
+    previewMsg.style.marginTop = 'var(--s2)';
+    adminBody.append(previewLabel, preview, previewMsg);
 
     function renderPreview(resolved) {
       const c = resolved.colour;
@@ -2051,6 +2057,30 @@
       preview.style.setProperty('--bg2', c.bg2);
       preview.style.setProperty('--text', c.text);
       preview.style.setProperty('--accent', c.accent);
+    }
+
+    async function refreshPreview() {
+      const level = levelSelect.value;
+      const params = new URLSearchParams({ level });
+      if (level !== 'event') {
+        const target = Number(targetInput.value);
+        if (!Number.isInteger(target)) { previewMsg.textContent = ''; previewMsg.className = 'notice'; return; }
+        params.set('target', String(target));
+      }
+      const res = await fetch(`/admin/theme/preview?${params}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        previewMsg.textContent = `Could not preview: ${data.error || res.status}`;
+        previewMsg.className = 'notice bad';
+        return;
+      }
+      const data = await res.json();
+      renderPreview(data.resolved);
+      previewMsg.textContent = data.validation.pass
+        ? `${level[0].toUpperCase() + level.slice(1)} theme: pass (7:1)`
+        : `${level[0].toUpperCase() + level.slice(1)} theme: FAIL — ` +
+          data.validation.checks.filter((c) => !c.pass).map((c) => `${c.label} (${c.ratio}:1, needs ${c.required}:1)`).join('; ');
+      previewMsg.className = 'notice ' + (data.validation.pass ? 'ok' : 'bad');
     }
 
     // Resolved + validated (CLAUDE.md #21) — the client never sees the
@@ -2084,6 +2114,7 @@
     }
 
     refreshResolved();
+    refreshPreview();
   }
 
   // --- backup: the whole database is one file (technical-design §8.2) ----

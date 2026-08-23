@@ -83,6 +83,17 @@ export function buildQueries(db) {
     return resolveTheme({ eventTheme, roundTheme, questionTheme });
   }
 
+  // Round default — event cascaded with a round's own theme, no question
+  // override. Used by the admin theme editor's live preview so "Round"
+  // level actually shows the round, not silently falling back to the
+  // event default (CLAUDE.md #21: resolve server-side, one place).
+  function resolveRoundTheme(event, roundNumber) {
+    const eventTheme = event.theme ? JSON.parse(event.theme) : null;
+    const roundRow = roundNumber != null ? getRoundByNumber.get(event.id, roundNumber) : null;
+    const roundTheme = roundRow?.theme ? JSON.parse(roundRow.theme) : null;
+    return resolveTheme({ eventTheme, roundTheme, questionTheme: null });
+  }
+
   // Chrome is set once at event level and never cascades (CLAUDE.md #20) —
   // logo and footer, picked by the resolved background's luminance since a
   // single logo file won't survive both a light and a dark theme.
@@ -237,7 +248,7 @@ export function buildQueries(db) {
     getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
     getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme, resolveChrome,
-    allResolvedThemes, getSettings, resolveTimer,
+    allResolvedThemes, getSettings, resolveTimer, resolveRoundTheme,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }
