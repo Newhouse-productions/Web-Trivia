@@ -129,4 +129,4 @@ try {
   await stopServer(server);
 }
 
-process.exit(check.summary() ? 0 : 1);
+process.exitCode = check.summary() ? 0 : 1;
