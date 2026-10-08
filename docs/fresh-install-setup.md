@@ -8,19 +8,17 @@ project up exactly where it left off. Read alongside `CLAUDE.md` and
 
 ## 0 · Before you wipe anything
 
-**There is no git remote configured for this repo.** `git clone` will not restore it — the
-only copies are wherever the folder itself lives. Confirm with `git remote -v` (empty output
-means no remote).
+The code is on GitHub at `https://github.com/Newhouse-productions/Web-Trivia` — push any
+local commits first (`git status`, then `git push`), and `git clone` restores it.
 
-Also gitignored, so `git` won't restore these either — back them up separately:
+Gitignored, so `git` won't restore these — back them up separately:
 
 - `data/quiz.db` (+ `-shm`/`-wal`) — the whole database, no other copy exists
 - `media/` — uploaded images, referenced by hash from the database
 - `.env` — if one was ever created (none exists as of this writing; defaults are used)
 
-**Before reinstalling Windows:** copy the entire project folder (currently `D:\Claude\trivia`)
-to external storage or another drive, gitignored files included. A `git push` to a private
-remote is the more durable fix if you set one up before the reinstall.
+**Before reinstalling Windows:** copy at least `data/`, `media/` and any `.env` from the
+project folder (currently `D:\Claude\trivia`) to external storage or another drive.
 
 ---
 
@@ -61,10 +59,13 @@ LTS"). This table is a reference point if something behaves differently on a new
 
 ## 2 · Restore the project
 
-1. Copy the backed-up project folder to its new location (e.g. `D:\Claude\trivia`, or wherever
-   you choose — nothing in the app stores an absolute path, per `CLAUDE.md` invariant 3, so the
-   location itself doesn't matter).
-2. If `data/` or `media/` weren't part of the backup, they'll be missing — see §4.
+1. Clone the repo to its new location (e.g. `D:\Claude\trivia`, or wherever you choose —
+   nothing in the app stores an absolute path, per `CLAUDE.md` invariant 3, so the location
+   itself doesn't matter):
+   ```powershell
+   git clone https://github.com/Newhouse-productions/Web-Trivia.git D:\Claude\trivia
+   ```
+2. Copy the backed-up `data/`, `media/` and `.env` into it. If they weren't backed up, see §4.
 3. If Git complains about the moved path:
    ```powershell
    git config --global --add safe.directory <path-to-repo>
@@ -82,9 +83,8 @@ npm install
 ```
 
 Installs: `fastify`, `@fastify/cookie`, `better-sqlite3`, `csv-parse`, `qrcode`, `sharp` (see
-`package.json`). No `@fastify/rate-limit` currently listed despite `CLAUDE.md` naming it in
-the justified-dependency set — check whether that's still pending or already folded into
-custom logic before assuming it's missing by accident.
+`package.json`). Rate limiting is in-house (`src/pinLimiter.js`, `src/passphraseLimiter.js`),
+not `@fastify/rate-limit`.
 
 ---
 
@@ -138,6 +138,7 @@ None are required — every one has a working default for local dev.
 
 - [ ] `node -v` → 20+
 - [ ] `git -C D:\Claude\trivia log --oneline -3` → shows real commit history, not empty
+- [ ] `git -C D:\Claude\trivia remote -v` → points at GitHub
 - [ ] `cloudflared --version` → works
 - [ ] `npm start` → `http://localhost:3000` responds
 - [ ] `.\dev.ps1` → prints a public HTTPS URL and a scannable QR code
@@ -146,15 +147,7 @@ None are required — every one has a working default for local dev.
 
 ---
 
-## 8 · Known gaps to pick up
-
-- **Rate limiting is unbuilt.** `CLAUDE.md` invariant 10 requires two layers — per-session
-  backoff for honest errors, plus a global per-role lockout counter for actual attacks, never
-  per-IP (240 phones share one NAT address). Neither exists yet: `@fastify/rate-limit` isn't
-  in `package.json`, and there's no rate-limiting code anywhere in `src/`. Pick this up on
-  re-import.
-
-## 9 · Claude Code session continuity
+## 8 · Claude Code session continuity
 
 Session transcripts are **not** part of the repo — they live under
 `%USERPROFILE%\.claude\projects\<encoded-project-path>\`. A Windows reinstall wipes them
