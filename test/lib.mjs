@@ -49,6 +49,11 @@ export async function kill(server) {
 
 export async function stopServer(server, { keep = false } = {}) {
   await kill(server);
+  // Close the keep-alive sockets so the script can end on its own. Calling
+  // process.exit() with sockets still closing crashes Node on Windows
+  // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)"), which is
+  // why the scripts set process.exitCode instead.
+  agent.destroy();
   if (!keep) rmSync(server.dir, { recursive: true, force: true });
 }
 

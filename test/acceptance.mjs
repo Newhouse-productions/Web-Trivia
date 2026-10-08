@@ -281,4 +281,4 @@ Not automated here — check by hand or with test/browser.mjs:
   21. A screen reader completes a full question without losing focus
   Load: npm run test:load`);
 
-process.exit(check.summary() ? 0 : 1);
+process.exitCode = check.summary() ? 0 : 1;
