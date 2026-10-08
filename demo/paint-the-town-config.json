@@ -29,9 +29,9 @@
       }
     },
     "settings": {
-      "poll_interval_ms": 3000,
+      "player_poll_ms": 3000,
       "timer_enabled": true,
-      "timer_duration_seconds": 60,
+      "timer_seconds": 60,
       "leaderboard_cadence": "every_round",
       "allow_team_name_edit_until": "round_1_starts"
     }

@@ -16,7 +16,7 @@
       }
     },
     "settings": {
-      "poll_interval_ms": 3000,
+      "player_poll_ms": 3000,
       "timer_enabled": false,
       "leaderboard_cadence": "every_round"
     }

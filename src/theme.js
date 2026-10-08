@@ -10,7 +10,14 @@ const CASCADE_PROPS = ['layout', 'bg', 'bg2', 'accent'];
 const DEFAULT_COLOUR = { bg: '#1A1D24', bg2: '#2A2F3A', accent: '#E0A82E' };
 const DEFAULT_LAYOUT = 'standard';
 
+function normalizeHex(hex) {
+  let h = String(hex || '').trim().toLowerCase().replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  return `#${h}`;
+}
+
 function hex2rgb(hex) {
+  hex = normalizeHex(hex);
   const n = parseInt(String(hex).replace('#', ''), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
@@ -88,6 +95,17 @@ export function validateContrast(colour) {
     const ratio = contrastRatio(c.a, c.b);
     return { ...c, ratio: Math.round(ratio * 10) / 10, pass: ratio >= c.required };
   });
+  // No pure black (a projector renders it as room light) and no pure white
+  // (it blooms) on the big screen (CLAUDE.md #22).
+  for (const [label, value] of [['background', colour.bg], ['background 2', colour.bg2], ['text', colour.text]]) {
+    const hex = normalizeHex(value);
+    if (hex === '#000000' || hex === '#ffffff') {
+      checks.push({
+        label: `Projector · ${label} is pure ${hex === '#000000' ? 'black' : 'white'}`,
+        a: value, b: null, required: null, ratio: null, pass: false
+      });
+    }
+  }
   return { pass: checks.every((c) => c.pass), checks };
 }
 

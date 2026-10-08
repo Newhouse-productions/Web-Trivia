@@ -3,7 +3,9 @@
 // re-importing into the SAME event fully replaces its question set and is
 // blocked once the event has actually been played (CLAUDE.md #6 — config
 // import always regenerates/creates, never partially patches).
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse } from 'csv-parse/sync';
 import QRCode from 'qrcode';
 import { readOpsSession, writeOpsSession } from '../opsSession.js';
@@ -12,6 +14,8 @@ import { parseQuestionsCsv } from '../import/questionsCsv.js';
 import { randomToken, randomPin } from '../tokens.js';
 import { LAYOUTS, validateContrast } from '../theme.js';
 import { buildResultsCsv } from '../results.js';
+
+const MEDIA_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'media');
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -71,8 +75,8 @@ export function registerAdminRoutes(app, { db, q }) {
   );
   const insertQuestion = db.prepare(`
     INSERT INTO questions (event_id, round, order_no, type, prompt, options, correct_answer,
-      aliases, points, image_ref, image_alt, video_url, av_cue, layout, is_practice, is_reserve, theme)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      aliases, points, image_ref, image_alt, video_url, av_cue, layout, is_practice, is_reserve, theme, av_alt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   function requireAdmin(req, reply) {
@@ -197,16 +201,45 @@ export function registerAdminRoutes(app, { db, q }) {
     return { settings: q.getSettings(event.id) };
   });
 
+  // Each setting validates to a stored string, or returns null if invalid.
+  // Bounds keep a typo from breaking the night: a 100ms player poll is 2,400
+  // requests a second from the room.
+  const intIn = (min, max) => (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= min && n <= max ? String(n) : null;
+  };
+  const SETTING_RULES = {
+    timer_enabled: (v) => (typeof v === 'boolean' ? String(v) : null),
+    timer_seconds: intIn(10, 600),
+    player_poll_ms: intIn(1000, 10000),
+    operator_poll_ms: intIn(500, 5000),
+    leaderboard_cadence: (v) => (['every_round', 'final_only'].includes(v) ? v : null)
+  };
+
+  // Partial update: only the keys sent are changed.
   app.put('/admin/settings', async (req, reply) => {
     const event = requireAdmin(req, reply);
     if (!event) return;
-    const timerEnabled = !!req.body?.timer_enabled;
-    upsertSetting.run(event.id, 'timer_enabled', String(timerEnabled));
-    logAudit({
-      eventId: event.id, role: 'admin', operator: readOpsSession(req).name,
-      action: 'setSettings', target: 'event', reason: `timer_enabled=${timerEnabled}`
-    });
-    return { ok: true, timer_enabled: timerEnabled };
+    const body = req.body || {};
+    const changes = [];
+    for (const [key, rule] of Object.entries(SETTING_RULES)) {
+      if (body[key] === undefined) continue;
+      const value = rule(body[key]);
+      if (value === null) return reply.code(400).send({ error: 'invalid_setting', key });
+      changes.push([key, value]);
+    }
+    if (!changes.length) return reply.code(400).send({ error: 'no_settings' });
+
+    db.transaction(() => {
+      for (const [key, value] of changes) upsertSetting.run(event.id, key, value);
+      // Phones and consoles pick up poll and timer changes on their next fetch.
+      q.bumpEventVersion.get(event.id);
+      logAudit({
+        eventId: event.id, role: 'admin', operator: readOpsSession(req).name,
+        action: 'setSettings', target: 'event', reason: changes.map(([k, v]) => `${k}=${v}`).join(', ')
+      });
+    })();
+    return { ok: true, settings: q.getSettings(event.id) };
   });
 
   app.post('/admin/events/:id/activate', async (req, reply) => {
@@ -263,6 +296,26 @@ export function registerAdminRoutes(app, { db, q }) {
     return { ok: true };
   });
 
+  // finished -> archived (technical-design §16.5): put away, kept until its
+  // retention date like any finished event. Only a finished event can be
+  // archived — an active one is finished first, so its retention clock runs.
+  const archiveEventStmt = db.prepare("UPDATE events SET status = 'archived' WHERE id = ? AND status = 'finished'");
+
+  app.post('/admin/events/:id/archive', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    if (Number(req.params.id) !== event.id) return reply.code(403).send({ error: 'wrong_event_session' });
+    if (event.status !== 'finished') return reply.code(409).send({ error: 'not_finished' });
+    db.transaction(() => {
+      archiveEventStmt.run(event.id);
+      logAudit({
+        eventId: event.id, role: 'admin', operator: readOpsSession(req).name, action: 'archiveEvent',
+        target: 'event', reason: `retained until ${event.retention_until}`
+      });
+    })();
+    return { ok: true };
+  });
+
   // --- listings: admin sees full detail, unlike every other role ---------
 
   app.get('/admin/questions', async (req, reply) => {
@@ -293,7 +346,7 @@ export function registerAdminRoutes(app, { db, q }) {
   const updateQuestionFields = db.prepare(`
     UPDATE questions SET
       prompt = ?, options = ?, correct_answer = ?, aliases = ?, points = ?,
-      image_ref = ?, image_alt = ?, video_url = ?, av_cue = ?
+      image_ref = ?, image_alt = ?, video_url = ?, av_cue = ?, av_alt = ?
     WHERE id = ? AND event_id = ?
   `);
 
@@ -427,6 +480,7 @@ export function registerAdminRoutes(app, { db, q }) {
         points,
         body.image_ref ?? question.image_ref, body.image_alt ?? question.image_alt,
         body.video_url ?? question.video_url, body.av_cue ?? question.av_cue,
+        body.av_alt !== undefined ? (String(body.av_alt).trim().slice(0, 500) || null) : question.av_alt,
         question.id, event.id
       );
 
@@ -499,7 +553,7 @@ export function registerAdminRoutes(app, { db, q }) {
           row.correct_answer,
           row.aliases ? JSON.stringify(row.aliases) : null,
           row.points, row.image_ref, row.image_alt, row.video_url, row.av_cue, row.layout,
-          row.is_practice ? 1 : 0, row.is_reserve ? 1 : 0, null
+          row.is_practice ? 1 : 0, row.is_reserve ? 1 : 0, null, row.av_alt
         );
       }
 
@@ -825,6 +879,9 @@ export function registerAdminRoutes(app, { db, q }) {
   const insertRoundRow = db.prepare(
     'INSERT INTO rounds (event_id, number, phase, theme) VALUES (?, ?, ?, ?)'
   );
+  const insertManifestRow = db.prepare(`
+    INSERT OR REPLACE INTO media_manifest (event_id, filename, sha256, uploaded_at) VALUES (?, ?, ?, ?)
+  `);
 
   app.get('/admin/config/export', async (req, reply) => {
     const event = requireAdmin(req, reply);
@@ -836,7 +893,7 @@ export function registerAdminRoutes(app, { db, q }) {
       correct_answer: row.correct_answer,
       aliases: row.aliases ? JSON.parse(row.aliases) : null,
       points: row.points, image_ref: row.image_ref, image_alt: row.image_alt,
-      video_url: row.video_url, av_cue: row.av_cue,
+      video_url: row.video_url, av_cue: row.av_cue, av_alt: row.av_alt,
       is_practice: !!row.is_practice, is_reserve: !!row.is_reserve,
       theme: row.theme ? JSON.parse(row.theme) : (row.layout ? { layout: row.layout } : null)
     }));
@@ -885,6 +942,8 @@ export function registerAdminRoutes(app, { db, q }) {
     const themeOnly = ev.theme ? { ...ev.theme } : null;
     if (themeOnly) delete themeOnly.chrome;
 
+    let mediaCount = 0;
+    const mediaMissing = [];
     const newEventId = db.transaction(() => {
       const { lastInsertRowid: eventId } = insertEventDraft.run(
         String(ev.name || config.name || 'Imported event').slice(0, 100),
@@ -914,13 +973,35 @@ export function registerAdminRoutes(app, { db, q }) {
           qu.aliases ? JSON.stringify(qu.aliases) : null, qu.points ?? 0,
           qu.image_ref ?? null, qu.image_alt ?? null, qu.video_url ?? null,
           qu.av_cue ?? null, qu.theme?.layout ?? qu.layout ?? null, qu.is_practice ? 1 : 0, qu.is_reserve ? 1 : 0,
-          theme
+          theme, qu.av_alt ?? null
         );
       }
-      for (const [key, value] of Object.entries(ev.settings || config.settings || {})) {
-        insertSettingRow.run(eventId, key, String(value));
+      // Same validation as the settings editor; anything unknown or out of
+      // range is dropped and falls back to the default.
+      // Older config files used these names.
+      const LEGACY_SETTING_NAMES = { poll_interval_ms: 'player_poll_ms', timer_duration_seconds: 'timer_seconds' };
+      for (const [rawKey, raw] of Object.entries(ev.settings || config.settings || {})) {
+        const key = LEGACY_SETTING_NAMES[rawKey] || rawKey;
+        const rule = SETTING_RULES[key];
+        const coerced = key === 'timer_enabled' && typeof raw === 'string' ? raw === 'true' : raw;
+        const value = rule ? rule(coerced) : null;
+        if (value !== null) insertSettingRow.run(eventId, key, value);
       }
       insertEventState.run(eventId);
+
+      // Media files are stored once, by content hash, and shared between
+      // events — so a clone only needs the filename -> hash map to find its
+      // images. A hash whose file isn't on this server (a config from
+      // another machine) is still mapped, and counted so admin knows to
+      // re-upload that image.
+      for (const m of config.media_manifest || []) {
+        const filename = String(m.filename || '').trim().toLowerCase().slice(0, 200);
+        const sha256 = String(m.sha256 || '');
+        if (!filename || !/^[a-f0-9]{64}$/.test(sha256)) continue;
+        insertManifestRow.run(eventId, filename, sha256, m.uploaded_at || new Date().toISOString());
+        mediaCount++;
+        if (!existsSync(join(MEDIA_DIR, `${sha256}.webp`))) mediaMissing.push(filename);
+      }
 
       logAudit({
         eventId, role: 'admin', operator: ops.name, action: 'importConfig',
@@ -936,6 +1017,7 @@ export function registerAdminRoutes(app, { db, q }) {
     writeOpsSession(reply, { sid: ops.sid, eventId: newEventId, role: 'admin', name: ops.name, iat: ops.iat });
     return {
       ok: true, event_id: newEventId, status: 'draft',
+      media: { mapped: mediaCount, missing: mediaMissing },
       pins: { host: newEvent.host_pin, marker: newEvent.marker_pin, floor: newEvent.floor_pin, admin: newEvent.admin_pin }
     };
   });

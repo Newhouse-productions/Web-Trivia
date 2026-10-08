@@ -111,6 +111,7 @@ export function registerMarkerRoutes(app, { db, q }) {
 
     return {
       version: event.version,
+      poll_ms: q.pollIntervals(event.id).operator,
       theme: q.resolveCurrentTheme(event, null),
       questions: rows.map((row) => ({
         id: row.id, round: row.round, order_no: row.order_no, prompt: row.prompt,

@@ -39,6 +39,9 @@ export function migrate(db) {
   // Milliseconds the event spent paused while this question was OPEN —
   // pause stops the timer (CLAUDE.md #17) without rewriting opened_at.
   addColumn('questions', 'timer_paused_ms', 'INTEGER NOT NULL DEFAULT 0');
+  // Text alternative for an audio cue, so the question is answerable
+  // without hearing it (scope §2 "Accessibility").
+  addColumn('questions', 'av_alt', 'TEXT');
 
   // round/order_no started NOT NULL; practice/reserve questions need them
   // nullable. SQLite can't drop a NOT NULL constraint in place, so rebuild.

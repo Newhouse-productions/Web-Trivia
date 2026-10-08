@@ -102,6 +102,7 @@ export function registerPlayerRoutes(app, { db, q }) {
       const paused = JSON.parse(event.paused);
       return {
         stage: 'paused',
+        poll_ms: q.pollIntervals(event.id).player,
         event_version: event.version,
         table_version: team.table_version,
         message: paused.message,
@@ -112,22 +113,21 @@ export function registerPlayerRoutes(app, { db, q }) {
     // A published round shows the leaderboard on the phone too, not just the
     // big screen — the room reads their own result while marking wraps up.
     const es = q.getEventState.get(event.id);
-    if (es.round_phase === 'PUBLISHED') {
-      const round = q.getPublishedRound.get(event.id);
-      if (round) {
-        const board = JSON.parse(round.published_leaderboard);
-        const place = board.findIndex((r) => r.team_id === team.id);
-        return {
-          stage: 'leaderboard',
-          event_version: event.version,
-          table_version: team.table_version,
-          round: round.number,
-          leaderboard: board,
-          our_place: place === -1 ? null : place + 1,
-          team: { table_number: team.table_number, team_name: team.team_name },
-          theme: q.resolveCurrentTheme(event, null)
-        };
-      }
+    const round = es.round_phase === 'PUBLISHED' ? q.getPublishedRound.get(event.id) : null;
+    const view = round ? q.publishedBoardView(event, round, team.id) : null;
+    if (view) {
+      return {
+        stage: 'leaderboard',
+        poll_ms: q.pollIntervals(event.id).player,
+        event_version: event.version,
+        table_version: team.table_version,
+        round: round.number,
+        leaderboard: view.rows,
+        full_board: view.full,
+        our_place: view.own ? view.own.place : null,
+        team: { table_number: team.table_number, team_name: team.team_name },
+        theme: q.resolveCurrentTheme(event, null)
+      };
     }
 
     const current = q.getCurrentQuestion.get(event.id);
@@ -136,6 +136,7 @@ export function registerPlayerRoutes(app, { db, q }) {
 
     return {
       stage: 'play',
+      poll_ms: q.pollIntervals(event.id).player,
       event_version: event.version,
       table_version: team.table_version,
       round: current ? current.round : null,

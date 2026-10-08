@@ -89,6 +89,15 @@ export function parseQuestionsCsv(text) {
       warnings.push(`image "${imageRef}" must be uploaded separately in Media`);
     }
 
+    // Audio questions must be answerable without hearing (scope §2
+    // "Accessibility"). A warning, not an error, so older sheets without
+    // the av_alt column still import — pre-flight counts what's missing.
+    const avCue = String(record.av_cue || '').trim();
+    const avAlt = String(record.av_alt || '').trim();
+    if (avCue && !avAlt) {
+      warnings.push('av_alt is empty — add a text alternative so the question works without hearing the clip');
+    }
+
     const layout = String(record.layout || '').trim().toLowerCase();
     if (layout && !VALID_LAYOUTS.includes(layout)) {
       errors.push(`layout "${layout}" is not one of ${VALID_LAYOUTS.join(', ')}`);
@@ -109,7 +118,8 @@ export function parseQuestionsCsv(text) {
       image_ref: imageRef,
       image_alt: imageAlt || null,
       video_url: String(record.video_url || '').trim() || null,
-      av_cue: String(record.av_cue || '').trim() || null,
+      av_cue: avCue || null,
+      av_alt: avAlt || null,
       layout: layout || null,
       is_practice: isPractice,
       is_reserve: isReserve,

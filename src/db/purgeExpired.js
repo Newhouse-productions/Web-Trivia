@@ -18,7 +18,7 @@ const db = getDb();
 
 const expired = db.prepare(`
   SELECT id, name, retention_until FROM events
-  WHERE status = 'finished' AND retention_until IS NOT NULL AND retention_until < ?
+  WHERE status IN ('finished', 'archived') AND retention_until IS NOT NULL AND retention_until < ?
 `).all(new Date().toISOString());
 
 if (!expired.length) {

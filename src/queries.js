@@ -3,6 +3,14 @@
 // deleting sensitive ones (CLAUDE.md #1).
 import { resolveTheme, validateContrast, isDark } from './theme.js';
 
+export const SETTINGS_DEFAULTS = {
+  timer_enabled: 'false',
+  timer_seconds: '60',
+  player_poll_ms: '3000',
+  operator_poll_ms: '1000',
+  leaderboard_cadence: 'every_round'
+};
+
 export function buildQueries(db) {
   const getEventById = db.prepare('SELECT * FROM events WHERE id = ?');
   const getTeamById = db.prepare('SELECT * FROM teams WHERE id = ?');
@@ -45,7 +53,7 @@ export function buildQueries(db) {
   const getCurrentQuestion = db.prepare(`
     SELECT es.question_status, q.id AS question_id, q.event_id, q.round, q.type, q.prompt,
            q.options, q.correct_answer, q.aliases, q.points, q.image_ref, q.image_alt,
-           q.video_url, q.av_cue, q.is_practice, q.theme, q.opened_at, q.timer_paused_ms
+           q.video_url, q.av_cue, q.av_alt, q.is_practice, q.theme, q.opened_at, q.timer_paused_ms
     FROM event_state es
     JOIN questions q ON q.id = es.current_question_id
     WHERE es.event_id = ?
@@ -55,16 +63,19 @@ export function buildQueries(db) {
   );
   const getRoundByNumber = db.prepare('SELECT theme FROM rounds WHERE event_id = ? AND number = ?');
   const getSettingRows = db.prepare('SELECT key, value FROM settings WHERE event_id = ?');
-  // The settings table is otherwise write/export-only (round-tripped through
-  // config JSON, never read at runtime) — this is the first real consumer,
-  // used to gate the optional per-question timer.
+  // Per-event settings, read from config rather than hardcoded (CLAUDE.md
+  // "Defaults"; scope §3, technical-design §21). Stored as strings; missing
+  // keys fall back to the settled defaults.
   function getSettings(eventId) {
-    return Object.fromEntries(getSettingRows.all(eventId).map((r) => [r.key, r.value]));
+    return { ...SETTINGS_DEFAULTS, ...Object.fromEntries(getSettingRows.all(eventId).map((r) => [r.key, r.value])) };
+  }
+  function pollIntervals(eventId) {
+    const settings = getSettings(eventId);
+    return { player: Number(settings.player_poll_ms), operator: Number(settings.operator_poll_ms) };
   }
 
   // Soft, server-timestamped cue — never auto-submits (scope §2 "Running
-  // the night"). A single fixed duration this pass; admin can only toggle
-  // it on/off, not change the length (deferred). Only shown while the
+  // the night"). Length is the timer_seconds setting. Only shown while the
   // question is actually OPEN — once closed/revealed a stale countdown adds
   // nothing.
   //
@@ -72,12 +83,31 @@ export function buildQueries(db) {
   // at all, and time spent paused is added to timer_paused_ms on resume,
   // so the countdown carries on from where it stopped. opened_at itself is
   // never rewritten — it's the first-open stamp other things depend on.
-  const TIMER_SECONDS = 60;
   function resolveTimer(event, question, questionStatus) {
     if (!question?.opened_at || questionStatus !== 'OPEN' || event.paused) return null;
-    if (getSettings(event.id).timer_enabled !== 'true') return null;
+    const settings = getSettings(event.id);
+    if (settings.timer_enabled !== 'true') return null;
     const startedMs = new Date(question.opened_at).getTime() + (question.timer_paused_ms || 0);
-    return { opened_at: new Date(startedMs).toISOString(), duration_seconds: TIMER_SECONDS };
+    return { opened_at: new Date(startedMs).toISOString(), duration_seconds: Number(settings.timer_seconds) };
+  }
+
+  // What the room sees of a published leaderboard (scope §2 "Leaderboard
+  // cadence"): top five after the early rounds, the full board after the
+  // last one. With leaderboard_cadence = final_only, early rounds aren't
+  // shown to the room at all (null) — the host still has the snapshot.
+  // An event with no round count set always shows the full board, since
+  // "the last round" can't be known. Phones also get their own row when
+  // it falls outside the top five.
+  const TOP_N = 5;
+  function publishedBoardView(event, round, ownTeamId = null) {
+    const board = JSON.parse(round.published_leaderboard).map((row, i) => ({ ...row, place: i + 1 }));
+    const isFinal = !event.total_rounds || round.number >= event.total_rounds;
+    if (!isFinal && getSettings(event.id).leaderboard_cadence === 'final_only') return null;
+    if (isFinal) return { rows: board, full: true, own: board.find((r) => r.team_id === ownTeamId) || null };
+    const rows = board.slice(0, TOP_N);
+    const own = board.find((r) => r.team_id === ownTeamId) || null;
+    if (own && own.place > TOP_N) rows.push(own);
+    return { rows, full: false, own };
   }
 
   // Round 1 has started once any real (non-practice) question has opened —
@@ -219,7 +249,10 @@ export function buildQueries(db) {
       options: row.options ? JSON.parse(row.options) : null,
       points: row.points,
       image: resolveMediaUrl(row.event_id, row.image_ref),
-      image_alt: row.image_alt || null
+      image_alt: row.image_alt || null,
+      // Authored to describe the clip without naming the answer, like
+      // image_alt — so it's safe from OPEN, same as the prompt.
+      av_alt: row.av_alt || null
     };
     // Never sent before REVEALED (CLAUDE.md #1).
     if (row.question_status === 'REVEALED') {
@@ -253,6 +286,7 @@ export function buildQueries(db) {
       image_alt: row.image_alt,
       video_url: row.video_url,
       av_cue: row.av_cue,
+      av_alt: row.av_alt,
       is_practice: !!row.is_practice,
       is_reserve: !!row.is_reserve,
       theme: row.theme ? JSON.parse(row.theme) : (row.layout ? { layout: row.layout } : null),
@@ -266,7 +300,7 @@ export function buildQueries(db) {
     getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
     getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme, resolveChrome,
-    allResolvedThemes, getSettings, resolveTimer, resolveRoundTheme, roundOneStarted,
+    allResolvedThemes, getSettings, pollIntervals, publishedBoardView, resolveTimer, resolveRoundTheme, roundOneStarted,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }

@@ -127,7 +127,10 @@
     return grid;
   }
 
+  let pollHandle = null;
+
   function render(state) {
+    if (pollHandle && state.poll_ms) pollHandle.setIntervalMs(state.poll_ms);
     clear(app);
     if (state.theme) applyTheme(state.theme);
     renderChrome(state.chrome);
@@ -163,17 +166,20 @@
       const heading = document.createElement('p');
       heading.className = 's-prompt';
       heading.style.fontSize = '4cqw';
-      heading.textContent = `Leaderboard — Round ${state.round}`;
+      heading.textContent = state.full_board
+        ? `Leaderboard — Round ${state.round}`
+        : `Top five — Round ${state.round}`;
       app.appendChild(heading);
 
       const list = document.createElement('div');
       list.className = 's-lb';
       state.leaderboard.forEach((row, i) => {
         const line = document.createElement('div');
-        line.className = 's-lb-row' + (i === 0 ? ' lead' : '');
+        const place = row.place ?? i + 1;
+        line.className = 's-lb-row' + (place === 1 ? ' lead' : '');
         const pos = document.createElement('span');
         pos.className = 'pos';
-        pos.textContent = String(i + 1);
+        pos.textContent = String(place);
         line.appendChild(pos);
         const swatchCss = colourCss(row.colour);
         if (swatchCss) {
@@ -296,5 +302,5 @@
   }
 
   refresh();
-  window.Poll.start({ vUrl: '/screen/v', stateUrl: '/screen/state', onState: render });
+  pollHandle = window.Poll.start({ vUrl: '/screen/v', stateUrl: '/screen/state', onState: render });
 })();

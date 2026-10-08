@@ -7,13 +7,14 @@ window.Poll = (function () {
   }
 
   function start({
-    intervalMs = 3000, jitterMs = 500, maxBackoffMs = 15000,
+    intervalMs: initialIntervalMs = 3000, jitterMs = 500, maxBackoffMs = 15000,
     vUrl = '/v', stateUrl = '/state', onState, onError, onStaleness
   }) {
     // Compared as a whole object, not a single scalar — /v can return one
     // counter ({version}) or several independent ones ({event_version,
     // table_version}); comparing the raw JSON means a change in any of them
     // is detected, with no risk of two counters colliding into one number.
+    let intervalMs = initialIntervalMs;
     let lastKey = null;
     let timer = null;
     let backoff = 0;
@@ -79,7 +80,16 @@ window.Poll = (function () {
 
     return {
       stop() { stopped = true; clearTimeout(timer); clearInterval(stalenessTimer); },
-      syncNow
+      syncNow,
+      // The interval is an event setting the server sends with each state
+      // (CLAUDE.md "Defaults": read from config, never hardcode). Takes
+      // effect from the next scheduled poll; jitter stays proportional.
+      setIntervalMs(ms) {
+        if (Number.isFinite(ms) && ms >= 500) {
+          intervalMs = ms;
+          jitterMs = Math.round(ms / 6);
+        }
+      }
     };
   }
 

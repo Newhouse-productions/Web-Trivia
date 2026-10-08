@@ -255,6 +255,7 @@ export function registerOpsRoutes(app, { db, q }) {
 
     return {
       version: event.version,
+      poll_ms: q.pollIntervals(event.id).operator,
       phase,
       total_rounds: event.total_rounds,
       round_phase: es.round_phase,
@@ -287,6 +288,7 @@ export function registerOpsRoutes(app, { db, q }) {
       preflight: phase === 'preflight' ? {
         question_count: questions.length,
         av_cue_count: questions.filter((qu) => qu.av_cue).length,
+        av_alt_missing: questions.filter((qu) => qu.av_cue && !qu.av_alt).length,
         themes: q.allResolvedThemes(event.id),
         practice_question: practiceQuestion ? { id: practiceQuestion.id, prompt: practiceQuestion.prompt } : null
       } : null

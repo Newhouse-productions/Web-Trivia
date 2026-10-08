@@ -395,6 +395,7 @@
 
   function renderHost(state) {
     lastState = state;
+    if (pollHandle && state.poll_ms) pollHandle.setIntervalMs(state.poll_ms);
     applyTheme(state.theme);
 
     // Phase is resolved server-side (state.phase) — this just shows
@@ -534,7 +535,8 @@
     clear(hostEls.preflightChecklist);
     hostEls.preflightChecklist.append(
       checklistTile('Question set', p.question_count > 0, `${p.question_count} loaded`),
-      checklistTile('AV cues', true, `${p.av_cue_count} set`),
+      checklistTile('AV cues', !p.av_alt_missing,
+        p.av_alt_missing ? `${p.av_cue_count} set, ${p.av_alt_missing} without a text alternative` : `${p.av_cue_count} set`),
       checklistTile('Themes validated', p.themes.event_default.validation.pass && p.themes.questions.every((q) => q.validation.pass),
         p.themes.questions.filter((q) => q.validation.pass).length + '/' + p.themes.questions.length + ' pass'),
       checklistTile('Tables checked in', state.tables_live.live === state.tables_live.total, `${state.tables_live.live} of ${state.tables_live.total}`)
@@ -1103,6 +1105,7 @@
   }
 
   function renderQueue(state) {
+    if (markerPollHandle && state.poll_ms) markerPollHandle.setIntervalMs(state.poll_ms);
     applyTheme(state.theme);
     clear(markerEls.list);
     if (!state.questions.length) {
@@ -1454,35 +1457,100 @@
   // src/queries.js's TIMER_SECONDS) — enough that the timer is reachable
   // at all, without building a full settings editor yet.
 
+  // A failed theme check: contrast checks carry a ratio, the pure
+  // black/white checks don't.
+  function describeCheck(c) {
+    return c.ratio == null ? c.label : `${c.label} (${c.ratio}:1, needs ${c.required}:1)`;
+  }
+
   function buildSettingsSection() {
     section('Settings');
 
-    const label = document.createElement('label');
-    label.className = 'label';
-    label.style.display = 'flex';
-    label.style.alignItems = 'center';
-    label.style.gap = 'var(--s2)';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    label.append(checkbox, document.createTextNode(' Timer (60s countdown shown once a question opens)'));
-    adminBody.appendChild(label);
+    // Event settings, read by the server at runtime (CLAUDE.md "Defaults").
+    function numberField(text, min, max, step) {
+      const label = document.createElement('label');
+      label.className = 'label';
+      label.textContent = text;
+      const input = document.createElement('input');
+      input.className = 'field';
+      input.type = 'number';
+      input.min = String(min);
+      input.max = String(max);
+      input.step = String(step);
+      label.appendChild(input);
+      adminBody.appendChild(label);
+      return input;
+    }
 
+    const timerLabel = document.createElement('label');
+    timerLabel.className = 'label';
+    timerLabel.style.display = 'flex';
+    timerLabel.style.alignItems = 'center';
+    timerLabel.style.gap = 'var(--s2)';
+    const timerEnabled = document.createElement('input');
+    timerEnabled.type = 'checkbox';
+    timerLabel.append(timerEnabled, document.createTextNode(' Timer — a soft countdown once a question opens, never auto-submits'));
+    adminBody.appendChild(timerLabel);
+
+    const timerSeconds = numberField('Timer length (seconds, 10–600)', 10, 600, 5);
+    const playerPoll = numberField('Phone and big screen poll (ms, 1000–10000)', 1000, 10000, 500);
+    const operatorPoll = numberField('Host and marker poll (ms, 500–5000)', 500, 5000, 250);
+
+    const cadenceLabel = document.createElement('label');
+    cadenceLabel.className = 'label';
+    cadenceLabel.textContent = 'Leaderboard';
+    const cadence = document.createElement('select');
+    cadence.className = 'field';
+    [['every_round', 'After every round (top five, full board at the end)'],
+     ['final_only', 'Final round only']].forEach(([value, text]) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = text;
+      cadence.appendChild(opt);
+    });
+    cadenceLabel.appendChild(cadence);
+    adminBody.appendChild(cadenceLabel);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn ghost';
+    saveBtn.textContent = 'Save settings';
     const msg = document.createElement('p');
     msg.className = 'error';
     msg.setAttribute('role', 'alert');
-    adminBody.appendChild(msg);
+    adminBody.append(saveBtn, msg);
 
-    checkbox.addEventListener('change', async () => {
+    function fill(settings) {
+      timerEnabled.checked = settings.timer_enabled === 'true';
+      timerSeconds.value = settings.timer_seconds;
+      playerPoll.value = settings.player_poll_ms;
+      operatorPoll.value = settings.operator_poll_ms;
+      cadence.value = settings.leaderboard_cadence;
+    }
+
+    saveBtn.addEventListener('click', async () => {
       const res = await fetch('/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timer_enabled: checkbox.checked })
+        body: JSON.stringify({
+          timer_enabled: timerEnabled.checked,
+          timer_seconds: Number(timerSeconds.value),
+          player_poll_ms: Number(playerPoll.value),
+          operator_poll_ms: Number(operatorPoll.value),
+          leaderboard_cadence: cadence.value
+        })
       });
-      msg.textContent = res.ok ? 'Saved.' : 'Could not save.';
+      const data = await res.json();
+      if (res.ok) {
+        fill(data.settings);
+        msg.textContent = 'Saved.';
+      } else {
+        msg.textContent = data.error === 'invalid_setting'
+          ? `Could not save: ${data.key.replace(/_/g, ' ')} is out of range.`
+          : 'Could not save.';
+      }
     });
 
-    fetch('/admin/settings', { cache: 'no-store' }).then((r) => r.json()).then((data) => {
-      checkbox.checked = data.settings?.timer_enabled === 'true';
-    });
+    fetch('/admin/settings', { cache: 'no-store' }).then((r) => r.json()).then((data) => fill(data.settings));
   }
 
   // --- events: many configured, exactly one active (technical-design §16.5) --
@@ -1606,6 +1674,19 @@
             refreshEvents();
           });
           row.appendChild(activateBtn);
+        }
+        if (e.status === 'finished' && e.id === data.current_event_id) {
+          const archiveBtn = document.createElement('button');
+          archiveBtn.type = 'button';
+          archiveBtn.className = 'btn ghost sm';
+          archiveBtn.style.marginLeft = 'auto';
+          archiveBtn.textContent = 'Archive';
+          archiveBtn.addEventListener('click', async () => {
+            const res2 = await fetch(`/admin/events/${e.id}/archive`, { method: 'POST' });
+            msg.textContent = res2.ok ? 'Archived. It is still deleted on its retention date.' : 'Could not archive.';
+            refreshEvents();
+          });
+          row.appendChild(archiveBtn);
         }
         if (e.status === 'active' && e.id === data.current_event_id) {
           const finishBtn = document.createElement('button');
@@ -1805,6 +1886,13 @@
       pointsInput.className = 'field';
       pointsInput.type = 'number';
       pointsInput.value = qu.points;
+      // Only for questions with an audio cue: describe the clip so the
+      // question works without hearing it, without naming the answer.
+      const avAltInput = document.createElement('input');
+      avAltInput.className = 'field';
+      avAltInput.placeholder = 'Audio text alternative (describe the clip, don\'t name the answer)';
+      avAltInput.value = qu.av_alt || '';
+      avAltInput.style.display = qu.av_cue ? '' : 'none';
 
       const previewBtn = document.createElement('button');
       previewBtn.type = 'button';
@@ -1825,7 +1913,8 @@
           prompt: promptInput.value,
           correct_answer: correctInput.value,
           aliases: aliasesInput.value.split('|').map((s) => s.trim()).filter(Boolean),
-          points: Number(pointsInput.value)
+          points: Number(pointsInput.value),
+          ...(qu.av_cue ? { av_alt: avAltInput.value } : {})
         };
       }
 
@@ -1862,7 +1951,7 @@
       });
 
       editorWrap.append(
-        promptInput, correctInput, aliasesInput, pointsInput, previewBtn, saveBtn, msg
+        promptInput, correctInput, aliasesInput, pointsInput, avAltInput, previewBtn, saveBtn, msg
       );
     }
 
@@ -2060,7 +2149,10 @@
       msg.textContent = res.ok
         ? `Created event ${data.event_id} as ${data.status}. PINs — host ${data.pins.host}, ` +
           `marker ${data.pins.marker}, floor ${data.pins.floor}, admin ${data.pins.admin}. ` +
-          `Activate it from the Events section above.`
+          `Activate it from the Events section above.` +
+          (data.media && data.media.missing.length
+            ? ` ${data.media.missing.length} image(s) aren't on this server — upload them in Media: ${data.media.missing.join(', ')}.`
+            : '')
         : `Could not import: ${data.error}`;
     });
 
@@ -2270,7 +2362,7 @@
       previewMsg.textContent = data.validation.pass
         ? `${level[0].toUpperCase() + level.slice(1)} theme: pass (7:1)`
         : `${level[0].toUpperCase() + level.slice(1)} theme: FAIL — ` +
-          data.validation.checks.filter((c) => !c.pass).map((c) => `${c.label} (${c.ratio}:1, needs ${c.required}:1)`).join('; ');
+          data.validation.checks.filter((c) => !c.pass).map(describeCheck).join('; ');
       previewMsg.className = 'notice ' + (data.validation.pass ? 'ok' : 'bad');
     }
 
@@ -2298,7 +2390,7 @@
       failingQuestions.forEach((r) => {
         const row = document.createElement('div');
         row.className = 'notice bad';
-        const failed = r.validation.checks.filter((c) => !c.pass).map((c) => `${c.label} (${c.ratio}:1, needs ${c.required}:1)`);
+        const failed = r.validation.checks.filter((c) => !c.pass).map(describeCheck);
         row.textContent = `Q${r.order_no ?? r.question_id}: ${failed.join('; ')}`;
         resolvedList.appendChild(row);
       });

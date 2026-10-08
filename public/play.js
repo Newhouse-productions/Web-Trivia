@@ -46,7 +46,9 @@
   function toEmbedUrl(url) {
     const match = String(url).match(/(?:v=|youtu\.be\/|embed\/)([\w-]{6,})/);
     if (!match) return null;
-    return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1`;
+    // Muted by default (scope §2 "Video") — 240 phones unmuting at once
+    // over the venue AV is the failure this avoids.
+    return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1&mute=1`;
   }
 
   async function refreshState() {
@@ -91,7 +93,17 @@
     if (pauseOverlay) pauseOverlay.style.display = 'none';
   }
 
+  // Polling starts the first time the phone reaches any live stage — not
+  // only the question view — so a phone that opens during a pause or a
+  // leaderboard still follows the room when it moves on.
+  function ensurePolling(state) {
+    if (!['play', 'paused', 'leaderboard'].includes(state.stage)) return;
+    if (!pollHandle) pollHandle = window.Poll.start({ onState: render, onStaleness: renderStaleness });
+    if (state.poll_ms) pollHandle.setIntervalMs(state.poll_ms);
+  }
+
   function render(state) {
+    ensurePolling(state);
     if (state.stage === 'paused') {
       showPaused(state.message);
       return;
@@ -139,7 +151,9 @@
     title.className = 'display';
     title.style.fontSize = 'var(--t-h2)';
     title.style.margin = '4px 0 var(--s4)';
-    title.textContent = `Leaderboard — Round ${state.round}`;
+    title.textContent = state.full_board
+      ? `Leaderboard — Round ${state.round}`
+      : `Top five — Round ${state.round}`;
     pbody.append(eyebrow, title);
 
     if (state.our_place) {
@@ -152,14 +166,23 @@
     const list = document.createElement('div');
     list.className = 'lb';
     state.leaderboard.forEach((row, i) => {
+      const place = row.place ?? i + 1;
+      // Our own row, appended below a top-five board, sits after a gap.
+      const previous = state.leaderboard[i - 1];
+      if (previous && place > (previous.place ?? i) + 1) {
+        const gap = document.createElement('div');
+        gap.className = 'note';
+        gap.textContent = '…';
+        list.appendChild(gap);
+      }
       const line = document.createElement('div');
       // .lead is rank-based (top of the board), distinct from "our table"
       // which gets its own marker below — the old markup conflated the two
       // via a single .selected class.
-      line.className = 'lb-row' + (i === 0 ? ' lead' : '');
+      line.className = 'lb-row' + (place === 1 ? ' lead' : '');
       const pos = document.createElement('span');
       pos.className = 'pos num';
-      pos.textContent = String(i + 1);
+      pos.textContent = String(place);
       line.appendChild(pos);
       // Team colour is a fixed swatch bar, never a row background
       // (CLAUDE.md #18, technical-design §20.4).
@@ -173,7 +196,7 @@
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = row.team_name;
-      if (state.our_place === i + 1) {
+      if (state.our_place === place) {
         const us = document.createElement('span');
         us.className = 'label';
         us.style.marginLeft = '6px';
@@ -424,6 +447,13 @@
     pbody.appendChild(prompt);
     playEls.prompt = prompt;
 
+    // Text alternative for an audio clip (scope §2 "Accessibility").
+    const avAlt = document.createElement('p');
+    avAlt.className = 'note';
+    avAlt.style.display = 'none';
+    pbody.appendChild(avAlt);
+    playEls.avAlt = avAlt;
+
     const videoWrap = document.createElement('div');
     videoWrap.className = 'video-wrap';
     pbody.appendChild(videoWrap);
@@ -528,10 +558,6 @@
     pbody.appendChild(syncBtn);
 
     updatePlay(state);
-
-    if (!pollHandle) {
-      pollHandle = window.Poll.start({ onState: render, onStaleness: renderStaleness });
-    }
   }
 
   // The resolved theme paints phone content, matching the projector for the
@@ -609,6 +635,7 @@
       playEls.prompt.classList.remove('statement-prompt');
       playEls.prompt.textContent = 'Waiting for the next question…';
       playEls.image.style.display = 'none';
+      playEls.avAlt.style.display = 'none';
       clear(playEls.videoWrap);
       clear(playEls.optionsWrap);
       playEls.textWrap.style.display = 'none';
@@ -628,6 +655,7 @@
       playEls.prompt.classList.remove('statement-prompt');
       playEls.prompt.textContent = 'Question coming up…';
       playEls.image.style.display = 'none';
+      playEls.avAlt.style.display = 'none';
       clear(playEls.videoWrap);
       clear(playEls.optionsWrap);
       playEls.textWrap.style.display = 'none';
@@ -639,6 +667,8 @@
     }
 
     playEls.prompt.textContent = state.question.prompt;
+    playEls.avAlt.textContent = state.question.av_alt ? `Audio clip: ${state.question.av_alt}` : '';
+    playEls.avAlt.style.display = state.question.av_alt ? '' : 'none';
 
     if (state.question.image) {
       playEls.image.src = state.question.image;

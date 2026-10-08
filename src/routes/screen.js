@@ -94,7 +94,7 @@ export function registerScreenRoutes(app, { db, q }) {
       const paused = JSON.parse(event.paused);
       const pausedTheme = q.resolveCurrentTheme(event, null);
       return {
-        stage: 'paused', version: event.version, event_name: event.name,
+        stage: 'paused', poll_ms: q.pollIntervals(event.id).player, version: event.version, event_name: event.name,
         message: paused.message || null,
         theme: pausedTheme, chrome: q.resolveChrome(event, pausedTheme.colour)
       };
@@ -102,27 +102,28 @@ export function registerScreenRoutes(app, { db, q }) {
 
     const es = q.getEventState.get(event.id);
 
-    if (es.round_phase === 'PUBLISHED') {
-      const round = getPublishedRound.get(event.id);
-      if (round) {
-        const boardTheme = q.resolveCurrentTheme(event, null);
-        return {
-          stage: 'leaderboard',
-          version: event.version,
-          event_name: event.name,
-          round: round.number,
-          theme: boardTheme,
-          leaderboard: JSON.parse(round.published_leaderboard),
-          chrome: q.resolveChrome(event, boardTheme.colour)
-        };
-      }
+    const round = es.round_phase === 'PUBLISHED' ? getPublishedRound.get(event.id) : null;
+    const view = round ? q.publishedBoardView(event, round) : null;
+    if (view) {
+      const boardTheme = q.resolveCurrentTheme(event, null);
+      return {
+        stage: 'leaderboard',
+        poll_ms: q.pollIntervals(event.id).player,
+        version: event.version,
+        event_name: event.name,
+        round: round.number,
+        full_board: view.full,
+        theme: boardTheme,
+        leaderboard: view.rows,
+        chrome: q.resolveChrome(event, boardTheme.colour)
+      };
     }
 
     const current = es.current_question_id ? q.getCurrentQuestion.get(event.id) : null;
     if (!current) {
       const holdingTheme = q.resolveCurrentTheme(event, null);
       return {
-        stage: 'holding', version: event.version, event_name: event.name, join: joinInfo,
+        stage: 'holding', poll_ms: q.pollIntervals(event.id).player, version: event.version, event_name: event.name, join: joinInfo,
         theme: holdingTheme, chrome: q.resolveChrome(event, holdingTheme.colour)
       };
     }
@@ -140,6 +141,7 @@ export function registerScreenRoutes(app, { db, q }) {
     const theme = q.resolveCurrentTheme(event, current);
     return {
       stage: 'question',
+      poll_ms: q.pollIntervals(event.id).player,
       version: event.version,
       event_name: event.name,
       round: current.round,
