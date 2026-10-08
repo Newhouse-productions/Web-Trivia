@@ -5,6 +5,7 @@
 import QRCode from 'qrcode';
 import { readOpsSession } from '../opsSession.js';
 import { makeAuditLogger } from '../audit.js';
+import { capText } from '../text.js';
 
 // Built from the incoming request, never stored (CLAUDE.md #3).
 function baseUrl(req) {
@@ -115,7 +116,7 @@ export function registerFloorRoutes(app, { db, q }) {
     const ctx = requireFloor(req, reply);
     if (!ctx) return;
     const teamId = Number(req.body?.team_id);
-    const teamName = String(req.body?.team_name || '').trim().slice(0, 32);
+    const teamName = capText(req.body?.team_name, 32);
     const team = q.getTeamById.get(teamId);
     if (!team || team.event_id !== ctx.event.id) return reply.code(404).send({ error: 'not_found' });
 
@@ -166,7 +167,7 @@ export function registerFloorRoutes(app, { db, q }) {
       return reply.code(409).send({ error: 'question_not_open' });
     }
 
-    const value = String(req.body?.value ?? '').slice(0, 200);
+    const value = capText(req.body?.value, 200, { trim: false });
     if (current.type === 'mcq') {
       const options = current.options ? JSON.parse(current.options) : [];
       if (!options.includes(value)) return reply.code(400).send({ error: 'invalid_option' });

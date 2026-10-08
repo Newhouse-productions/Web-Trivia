@@ -93,7 +93,23 @@ The failure runbook is in `docs/trivia-night-scope.md` §8 — print it and keep
 |---|---|
 | `npm start` | Run the server |
 | `npm run seed` | **Wipes the database** and creates the demo event |
-| `npm run purge` | Deletes finished events past their 30-day retention. Meant for a daily scheduled task |
+| `npm run purge` | Deletes finished and archived events past their 30-day retention. Meant for a daily scheduled task |
+| `npm test` and `npm run test:*` | The platform tests — see Testing below |
+
+## Testing
+
+Each script seeds its own throwaway database in a temp folder and starts its own server on a
+spare port, so it never touches `data/quiz.db` and can run while the app is running.
+
+| Command | What it checks | Time |
+|---|---|---|
+| `npm test` | The scope §7 dry-run checklist, item by item: gate to answer, takeover, wake, closed answers, two hosts, aliases and marking, reopen, pause, no answer leaks, hostile names, bonus isolation, token handling, themes, publish, kill-and-restart, bookmarks, finished events | ~5s |
+| `npm run test:night` | A whole night: 240 phones, 3 rounds of 10, live marking, takeover, floor entry, bonuses, pause, late tables, a skipped question. Every score on the console, big screen, each phone and the CSV export is checked against an independent tally | ~10s |
+| `npm run test:load` | 300 phones polling for 10 minutes while the host runs questions. Passes on zero errors and confirmed keep-alive. `LOAD_MINUTES=1` for a quick run | 10 min |
+| `npm run test:browser` | Real-browser checks: staleness banner, a half-typed answer surviving pause, focus never lost, wake from sleep, hostile names on every surface. Needs Playwright: `npm install --no-save playwright && npx playwright install chromium` | ~1 min |
+
+Still checked by hand on the night's hardware: the big screen read from the back of the
+actual room, and a screen reader completing a question on a real phone.
 
 ## Data and backups
 
@@ -118,6 +134,7 @@ public/                 the pages: play, ops (all operator roles), screen — no
 templates/              CSV/XLSX import templates and an example config
 demo/                   a sample event package (config, logos, banner)
 docs/                   scope, technical design, design handover, setup notes
+test/                   acceptance, full-night simulation, load and browser tests
 Mockups/                HTML design mockups
 ```
 

@@ -4,6 +4,7 @@ import { randomToken } from '../tokens.js';
 import { readSession, writeSession } from '../session.js';
 import { checkLimiter, recordFailure, recordSuccess } from '../passphraseLimiter.js';
 import { makeAuditLogger } from '../audit.js';
+import { capText } from '../text.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -197,7 +198,7 @@ export function registerPlayerRoutes(app, { db, q }) {
     const { event, team } = ctx;
     if (event.paused) return reply.code(423).send({ error: 'paused' });
 
-    const username = String(req.body?.username || '').trim().slice(0, 20);
+    const username = capText(req.body?.username, 20);
     if (!username) return reply.code(400).send({ error: 'username_required' });
 
     const taken = q.getTeamUsernames.all(team.id).map((r) => r.username.toLowerCase());
@@ -302,7 +303,7 @@ export function registerPlayerRoutes(app, { db, q }) {
     }
 
     // Capped at the API, not the input field (CLAUDE.md #2); same cap as Floor.
-    const teamName = String(req.body?.team_name ?? '').trim().slice(0, 32);
+    const teamName = capText(req.body?.team_name, 32);
 
     db.transaction(() => {
       setTeamName.run(teamName || null, team.id);
@@ -352,7 +353,7 @@ export function registerPlayerRoutes(app, { db, q }) {
       return reply.code(409).send({ error: 'question_not_open' });
     }
 
-    const value = String(req.body?.value ?? '').slice(0, 200);
+    const value = capText(req.body?.value, 200, { trim: false });
     if (current.type === 'mcq') {
       const options = current.options ? JSON.parse(current.options) : [];
       if (!options.includes(value)) return reply.code(400).send({ error: 'invalid_option' });

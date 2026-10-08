@@ -7,10 +7,13 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
     "seed": "node src/db/seed.js",
     "purge": "node src/db/purgeExpired.js",
-    "start": "node src/server.js"
+    "test": "node test/acceptance.mjs",
+    "test:night": "node test/night.mjs",
+    "test:load": "node test/load.mjs",
+    "test:browser": "node test/browser.mjs"
   },
   "keywords": [],
   "author": "",

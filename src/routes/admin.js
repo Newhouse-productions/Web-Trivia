@@ -14,6 +14,7 @@ import { parseQuestionsCsv } from '../import/questionsCsv.js';
 import { randomToken, randomPin } from '../tokens.js';
 import { LAYOUTS, validateContrast } from '../theme.js';
 import { buildResultsCsv } from '../results.js';
+import { capText } from '../text.js';
 
 const MEDIA_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'media');
 
@@ -480,7 +481,7 @@ export function registerAdminRoutes(app, { db, q }) {
         points,
         body.image_ref ?? question.image_ref, body.image_alt ?? question.image_alt,
         body.video_url ?? question.video_url, body.av_cue ?? question.av_cue,
-        body.av_alt !== undefined ? (String(body.av_alt).trim().slice(0, 500) || null) : question.av_alt,
+        body.av_alt !== undefined ? (capText(body.av_alt, 500) || null) : question.av_alt,
         question.id, event.id
       );
 

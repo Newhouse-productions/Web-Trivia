@@ -11,6 +11,7 @@ import {
 } from '../pinLimiter.js';
 import { makeAuditLogger } from '../audit.js';
 import { buildResultsCsv } from '../results.js';
+import { capText } from '../text.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -196,7 +197,7 @@ export function registerOpsRoutes(app, { db, q }) {
 
     recordSessionSuccess(sid);
     recordRoleSuccess(event.id, role);
-    const name = String(req.body?.name || '').trim().slice(0, 20) || role[0].toUpperCase() + role.slice(1);
+    const name = capText(req.body?.name, 20) || role[0].toUpperCase() + role.slice(1);
     writeOpsSession(reply, { sid, eventId: event.id, role, name });
     return { ok: true, role, name };
   });
@@ -378,8 +379,8 @@ export function registerOpsRoutes(app, { db, q }) {
       return reply.code(409).send({ error: 'stale', current_version: event.version });
     }
 
-    const reason = String(req.body?.reason || '').trim().slice(0, 40);
-    const message = String(req.body?.message || '').trim().slice(0, 200);
+    const reason = capText(req.body?.reason, 40);
+    const message = capText(req.body?.message, 200);
     // Re-pausing to change the message keeps the original start time, so
     // the timer credit on resume covers the whole pause.
     const previousAt = event.paused ? JSON.parse(event.paused).at : null;
@@ -592,7 +593,7 @@ export function registerOpsRoutes(app, { db, q }) {
       return reply.code(409).send({ error: 'question_not_open' });
     }
 
-    const value = String(req.body?.value ?? '').slice(0, 200);
+    const value = capText(req.body?.value, 200, { trim: false });
     if (current.type === 'mcq') {
       const options = current.options ? JSON.parse(current.options) : [];
       if (!options.includes(value)) return reply.code(400).send({ error: 'invalid_option' });

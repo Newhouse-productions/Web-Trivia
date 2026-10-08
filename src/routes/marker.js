@@ -47,7 +47,7 @@ export function registerMarkerRoutes(app, { db, q }) {
     'UPDATE answers SET is_correct = ?, marked_by = ?, marked_at = ? WHERE team_id = ? AND question_id = ?'
   );
   const updateAliases = db.prepare('UPDATE questions SET aliases = ? WHERE id = ?');
-  const getAnswersForQuestion = db.prepare('SELECT team_id, value FROM answers WHERE question_id = ?');
+  const getAnswersForQuestion = db.prepare('SELECT team_id, value, is_correct FROM answers WHERE question_id = ?');
   const getTeamCount = db.prepare('SELECT COUNT(*) AS n FROM teams WHERE event_id = ? AND archived = 0');
   // Other text questions in the same round, marked or not — the summary
   // screen's round-progress pills (design mockup: "3 · Question done").
@@ -256,9 +256,12 @@ export function registerMarkerRoutes(app, { db, q }) {
     const alreadyPresent = existingAliases.some((a) => normalize(a) === normalize(alias));
     const newAliases = alreadyPresent ? existingAliases : [...existingAliases, alias];
 
+    // Only answers this changes: ones already correct keep their mark and
+    // who made it, the audit count is what actually moved, and only those
+    // tables' phones are woken.
     const acceptedValues = new Set([normalize(question.correct_answer), ...newAliases.map(normalize)]);
     const matchingTeamIds = getAnswersForQuestion.all(questionId)
-      .filter((a) => acceptedValues.has(normalize(a.value)))
+      .filter((a) => a.is_correct !== 1 && acceptedValues.has(normalize(a.value)))
       .map((a) => a.team_id);
 
     db.transaction(() => {

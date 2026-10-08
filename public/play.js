@@ -779,17 +779,38 @@
         label.textContent = state.question.correct_answer;
         tile.append(chip, label);
         playEls.optionsWrap.appendChild(tile);
+      } else if (!team.is_captain) {
+        // Followers see the table's answer, never a field they can't use
+        // (scope §2: "Controls absent, not disabled").
+        playEls.textWrap.style.display = 'none';
+        playEls.optionsWrap.style.display = '';
+        if (state.our_answer) {
+          const tile = document.createElement('div');
+          tile.className = 'tile flat seated';
+          const label = document.createElement('span');
+          label.textContent = state.our_answer.value;
+          const mark = document.createElement('span');
+          mark.className = 'mark status ok';
+          mark.textContent = 'Chosen';
+          tile.append(label, mark);
+          playEls.optionsWrap.appendChild(tile);
+        }
       } else {
         playEls.optionsWrap.style.display = 'none';
         playEls.textWrap.style.display = '';
-        if (isNewQuestion) {
+        // Fill from the table's answer on a new question, or when this phone
+        // has just become captain mid-question — but never over what the
+        // captain is typing (CLAUDE.md #15).
+        const becameCaptain = !playEls.wasCaptain;
+        if ((isNewQuestion || becameCaptain) && document.activeElement !== playEls.textInput) {
           playEls.textInput.value = state.our_answer ? state.our_answer.value : '';
         }
         playEls.textInput.disabled = !canAnswer;
         playEls.textSubmit.disabled = !canAnswer;
-        playEls.textSubmit.style.display = team.is_captain ? '' : 'none';
+        playEls.textSubmit.style.display = '';
       }
     }
+    playEls.wasCaptain = team.is_captain;
 
     // Submission confirmation (it landed) vs reveal result (right/wrong) —
     // two distinct signals, never conflated (design-handover §8).
@@ -814,9 +835,10 @@
     }
 
     if (!team.is_captain) {
-      playEls.note.textContent = state.our_answer
+      const closed = !isOpen && !isRevealed ? 'Answers are closed. ' : '';
+      playEls.note.textContent = closed + (state.our_answer
         ? (team.captain_name ? `${team.captain_name} answered for your table.` : 'Answered for your table.')
-        : 'Waiting for your captain to answer.';
+        : isOpen ? 'Waiting for your captain to answer.' : 'Your table did not answer.');
     } else if (isRevealed) {
       if (!state.our_answer) {
         playEls.note.textContent = 'Your table did not answer.';
@@ -826,7 +848,7 @@
         playEls.note.textContent = '';
       }
     } else if (!isOpen) {
-      playEls.note.textContent = 'This question is not open for answers.';
+      playEls.note.textContent = state.our_answer ? 'Answers are closed.' : 'Answers are closed. Your table did not answer.';
     } else {
       playEls.note.textContent = '';
     }
