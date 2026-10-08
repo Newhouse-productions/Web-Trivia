@@ -23,8 +23,13 @@ export function registerPlayerRoutes(app, { db, q }) {
 
   app.get('/t/:token', async (req, reply) => {
     const row = q.getTeamByToken.get(req.params.token);
-    if (!row || row.event_status !== 'active' || row.archived) {
+    if (!row || row.archived) {
       return reply.code(404).type('text/html').send(messagePage("This code isn't recognised."));
+    }
+    // A real code for an event that isn't live (finished, or not started)
+    // gets a plain message, not a 404 and not stale state (scope §7).
+    if (row.event_status !== 'active') {
+      return reply.type('text/html').send(messagePage("This event isn't running right now."));
     }
 
     const existing = readSession(req);

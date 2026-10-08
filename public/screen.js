@@ -97,6 +97,25 @@
     }
   }
 
+  // Joining instructions while the room is still arriving (scope §4). The
+  // table's own QR code carries the link, so the screen only needs to say
+  // "scan" and give the passphrase.
+  function renderJoin(join) {
+    const p = document.createElement('p');
+    p.className = 's-prompt statement';
+    p.textContent = 'Scan the code on your table';
+    app.appendChild(p);
+    if (join && join.passphrase) {
+      const label = document.createElement('p');
+      label.className = 's-eyebrow';
+      label.textContent = 'Passphrase';
+      const value = document.createElement('p');
+      value.className = 's-prompt';
+      value.textContent = join.passphrase;
+      app.append(label, value);
+    }
+  }
+
   function tally(count, total, outstanding) {
     const grid = document.createElement('div');
     grid.className = 's-tally';
@@ -127,9 +146,15 @@
     app.appendChild(eyebrow);
 
     if (state.stage === 'holding') {
+      renderJoin(state.join);
+      return;
+    }
+
+    // The question is absent, not hidden (CLAUDE.md #17).
+    if (state.stage === 'paused') {
       const p = document.createElement('p');
       p.className = 's-prompt statement';
-      p.textContent = 'Scan the code on your table';
+      p.textContent = state.message || 'Paused';
       app.appendChild(p);
       return;
     }
@@ -177,6 +202,10 @@
       // PENDING is a round card, not the question — the server withholds
       // the prompt until the host opens it (CLAUDE.md #1).
       if (q.state === 'PENDING') {
+        if (state.join) {
+          renderJoin(state.join);
+          return;
+        }
         const holding = document.createElement('p');
         holding.className = 's-prompt statement';
         holding.textContent = layout === 'media' ? 'Listen carefully…' : `Round ${state.round}`;
@@ -253,6 +282,15 @@
         answered.textContent = `${state.answered.count} / ${state.answered.total} answered`;
         app.appendChild(answered);
         app.appendChild(tally(state.answered.count, state.answered.total, null));
+      }
+
+      // Practice question running while late arrivals still need to join.
+      if (state.join && state.join.passphrase) {
+        const joinLine = document.createElement('p');
+        joinLine.className = 's-eyebrow';
+        joinLine.style.marginTop = '1.6cqw';
+        joinLine.textContent = `Still joining? Scan your table's code · Passphrase: ${state.join.passphrase}`;
+        app.appendChild(joinLine);
       }
     }
   }

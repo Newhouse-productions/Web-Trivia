@@ -50,6 +50,11 @@ export function registerScreenRoutes(app, { db, q }) {
   const getPublishedRound = db.prepare(
     "SELECT * FROM rounds WHERE event_id = ? AND phase = 'PUBLISHED' ORDER BY number DESC LIMIT 1"
   );
+  // Before the first real question opens, the room is still arriving —
+  // same pre-flight test the host console uses (practice doesn't count).
+  const getAnyRealQuestionOpened = db.prepare(
+    'SELECT 1 FROM questions WHERE event_id = ? AND is_practice = 0 AND opened_at IS NOT NULL LIMIT 1'
+  );
 
   app.get('/screen/:token', async (req, reply) => {
     const event = getEventByScreenToken.get(req.params.token);
@@ -79,6 +84,22 @@ export function registerScreenRoutes(app, { db, q }) {
     const event = q.getEventById.get(session.eventId);
     if (!event || event.status !== 'active') return { stage: 'event_not_running' };
 
+    // Joining instructions while people are still arriving (scope §4). The
+    // passphrase is a room-level doormat, meant to be read out in the room.
+    const joinInfo = getAnyRealQuestionOpened.get(event.id) ? null : { passphrase: event.passphrase };
+
+    // Pause overlays everything, here as on the phones (CLAUDE.md #17):
+    // the question leaves the screen, and resuming restores exactly it.
+    if (event.paused) {
+      const paused = JSON.parse(event.paused);
+      const pausedTheme = q.resolveCurrentTheme(event, null);
+      return {
+        stage: 'paused', version: event.version, event_name: event.name,
+        message: paused.message || null,
+        theme: pausedTheme, chrome: q.resolveChrome(event, pausedTheme.colour)
+      };
+    }
+
     const es = q.getEventState.get(event.id);
 
     if (es.round_phase === 'PUBLISHED') {
@@ -101,7 +122,7 @@ export function registerScreenRoutes(app, { db, q }) {
     if (!current) {
       const holdingTheme = q.resolveCurrentTheme(event, null);
       return {
-        stage: 'holding', version: event.version, event_name: event.name,
+        stage: 'holding', version: event.version, event_name: event.name, join: joinInfo,
         theme: holdingTheme, chrome: q.resolveChrome(event, holdingTheme.colour)
       };
     }
@@ -125,6 +146,7 @@ export function registerScreenRoutes(app, { db, q }) {
       theme,
       chrome: q.resolveChrome(event, theme.colour),
       question: payload,
+      join: joinInfo,
       timer: q.resolveTimer(event, current.opened_at, current.question_status),
       answered: { count: answeredTotal, total: teamTotal }
     };

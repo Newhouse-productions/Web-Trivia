@@ -147,6 +147,21 @@ export function registerAdminRoutes(app, { db, q }) {
     };
   });
 
+  // Everything needed to run the night that otherwise only lives in the
+  // database: passphrase, big-screen link and role PINs. Admin-only, for
+  // the event this session authenticated into. The screen link is built
+  // from the current request host, never stored (CLAUDE.md #3).
+  app.get('/admin/events/:id/access', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    if (Number(req.params.id) !== event.id) return reply.code(403).send({ error: 'wrong_event_session' });
+    return {
+      passphrase: event.passphrase,
+      screen_url: `${baseUrl(req)}/screen/${event.screen_token}`,
+      pins: { host: event.host_pin, marker: event.marker_pin, floor: event.floor_pin, admin: event.admin_pin }
+    };
+  });
+
   // Nullable and admin-set only — drives the host's pre-flight/final phase
   // detection (see /host/state), never auto-inferred from round activity.
   app.put('/admin/events/:id/total-rounds', async (req, reply) => {

@@ -210,6 +210,15 @@
     app.appendChild(vitals); // flush with the console's top edge, not inset
     hostEls.vitals = vitals;
 
+    // One inline confirm step for the consequential actions — publish and
+    // reopen (technical-design §3). Outside the phase sections so it shows
+    // whichever one is visible; built once so a poll never clears it.
+    const confirmBox = document.createElement('div');
+    confirmBox.className = 'cbody';
+    confirmBox.style.display = 'none';
+    app.appendChild(confirmBox);
+    hostEls.confirmBox = confirmBox;
+
     // Three fixed sections, built once and never torn down — only one is
     // visible at a time (state.phase decides which). Rebuilding "active"
     // per phase-switch would lose the pause form's typed-but-unsaved text
@@ -248,6 +257,12 @@
     avCue.style.marginTop = 'var(--s3)';
     cbody.appendChild(avCue);
     hostEls.avCue = avCue;
+
+    const publishWrap = document.createElement('div');
+    publishWrap.className = 'stack';
+    publishWrap.style.marginTop = 'var(--s3)';
+    cbody.appendChild(publishWrap);
+    hostEls.publishWrap = publishWrap;
 
     const rule1 = document.createElement('hr');
     rule1.className = 'rule';
@@ -325,7 +340,7 @@
     const label = document.createElement('span');
     label.textContent = qu.is_practice ? `Practice: ${qu.prompt}`
       : qu.is_reserve ? `Reserve: ${qu.prompt}`
-      : `R${qu.round} Q${qu.order_no}: ${qu.prompt}`;
+      : `R${qu.round} Q${qu.order_no}: ${qu.prompt}${qu.is_skipped ? ' · skipped' : ''}`;
     row.appendChild(label);
 
     const isCurrent = state.current && state.current.id === qu.id;
@@ -351,7 +366,18 @@
         kbd.textContent = action.kbd;
         btn.appendChild(kbd);
       }
-      btn.addEventListener('click', () => sendCommand(qu.id, action.state));
+      if (action.label === 'Reopen') {
+        // Warn before reopening (CLAUDE.md #7, technical-design §2.4).
+        btn.addEventListener('click', () => askConfirm(
+          (currentState === 'REVEALED'
+            ? 'The answer has already been revealed to the room. '
+            : '') + 'Reopening will send any answer that changes back to the marking queue.',
+          'Reopen question',
+          () => sendCommand(qu.id, 'OPEN')
+        ));
+      } else {
+        btn.addEventListener('click', () => sendCommand(qu.id, action.state));
+      }
       row.appendChild(btn);
 
       // Space always progresses the CURRENT question only (never "Show",
@@ -435,6 +461,8 @@
     hostEls.avCue.textContent = cuePending
       ? `${state.current.av_cue} — play from the venue laptop, not sent to phones. Open the question once it finishes.`
       : '';
+
+    renderPublish(state);
 
     if (state.paused) {
       hostEls.pauseStatus.style.display = '';
@@ -647,6 +675,96 @@
       row.append(name, score);
       hostEls.finalList.appendChild(row);
     });
+  }
+
+  function askConfirm(message, confirmLabel, onConfirm) {
+    const box = hostEls.confirmBox;
+    clear(box);
+    const notice = document.createElement('div');
+    notice.className = 'notice bad';
+    notice.setAttribute('role', 'alert');
+    notice.textContent = message;
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = 'var(--s2)';
+    btnRow.style.marginTop = 'var(--s3)';
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'btn';
+    yes.textContent = confirmLabel;
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.className = 'btn ghost';
+    no.textContent = 'Cancel';
+    const close = () => { clear(box); box.style.display = 'none'; };
+    yes.addEventListener('click', () => { close(); onConfirm(); });
+    no.addEventListener('click', close);
+    btnRow.append(yes, no);
+    box.append(notice, btnRow);
+    box.style.display = '';
+    no.focus();
+  }
+
+  // Publishing is its own host action, separate from reveal, and snapshots
+  // the leaderboard for the room (scope §2, technical-design §2.5).
+  function renderPublish(state) {
+    const wrap = hostEls.publishWrap;
+    clear(wrap);
+    const pub = state.publish;
+    if (!pub) return;
+
+    const status = document.createElement('p');
+    status.className = 'note';
+    const parts = [];
+    if (pub.published && state.round_phase === 'PUBLISHED') parts.push(`Round ${pub.round} is published.`);
+    if (pub.unmarked) parts.push(`${pub.unmarked} ${pub.unmarked === 1 ? 'answer' : 'answers'} still to mark.`);
+    if (pub.unasked) parts.push(`${pub.unasked} ${pub.unasked === 1 ? 'question' : 'questions'} not yet asked.`);
+    status.textContent = parts.join(' ');
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn ghost wide';
+    btn.textContent = `${pub.published ? 'Re-publish' : 'Publish'} round ${pub.round}`;
+    btn.addEventListener('click', () => {
+      const warnings = [];
+      if (pub.unmarked) {
+        warnings.push(`${pub.unmarked} free-text ${pub.unmarked === 1 ? 'answer is' : 'answers are'} still unmarked and will score nothing until marked.`);
+      }
+      if (pub.unasked) {
+        warnings.push(`${pub.unasked} ${pub.unasked === 1 ? 'question was' : 'questions were'} never asked and will be marked skipped.`);
+      }
+      if (pub.published) warnings.push('This replaces the leaderboard the room has already seen.');
+      askConfirm(
+        `Publish round ${pub.round} to the big screen and phones?` + (warnings.length ? ' ' + warnings.join(' ') : ''),
+        pub.unmarked ? 'Publish anyway' : 'Publish',
+        () => publishRound(pub.round, pub.unmarked > 0)
+      );
+    });
+
+    if (status.textContent) wrap.appendChild(status);
+    wrap.appendChild(btn);
+  }
+
+  async function publishRound(round, force) {
+    hostEls.error.textContent = '';
+    try {
+      const res = await fetch('/host/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ round, force, expects_version: lastState.version })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        hostEls.error.textContent = data.error === 'stale'
+          ? 'Another host session moved on — refreshing.'
+          : data.error === 'unmarked_answers'
+            ? `${data.unmarked} answers still unmarked — try again to publish anyway.`
+            : `Could not publish: ${data.error}`;
+      }
+      await refreshHost();
+    } catch {
+      hostEls.error.textContent = 'Could not reach the server.';
+    }
   }
 
   async function sendCommand(questionId, state) {
@@ -1386,6 +1504,50 @@
     const list = document.createElement('div');
     list.className = 'stack';
 
+    // Passphrase, big-screen link and PINs — hidden until asked for, since
+    // this laptop may be in view of the room.
+    const access = document.createElement('div');
+    access.className = 'stack';
+    access.style.marginTop = 'var(--s3)';
+
+    async function showAccess(eventId) {
+      clear(access);
+      const res = await fetch(`/admin/events/${eventId}/access`, { cache: 'no-store' });
+      if (!res.ok) {
+        msg.textContent = 'Could not load access codes.';
+        return;
+      }
+      const data = await res.json();
+      const rows = [
+        ['Passphrase', data.passphrase],
+        ['Big screen link', data.screen_url],
+        ['Host PIN', data.pins.host],
+        ['Marker PIN', data.pins.marker],
+        ['Floor PIN', data.pins.floor],
+        ['Admin PIN', data.pins.admin]
+      ];
+      rows.forEach(([k, v]) => {
+        const row = document.createElement('div');
+        row.className = 'tile flat';
+        const key = document.createElement('span');
+        key.className = 'label';
+        key.textContent = k;
+        const val = document.createElement('span');
+        val.className = 'num';
+        val.style.marginLeft = 'auto';
+        val.style.wordBreak = 'break-all';
+        val.textContent = v || '—';
+        row.append(key, val);
+        access.appendChild(row);
+      });
+      const hideBtn = document.createElement('button');
+      hideBtn.type = 'button';
+      hideBtn.className = 'btn ghost sm';
+      hideBtn.textContent = 'Hide access codes';
+      hideBtn.addEventListener('click', () => clear(access));
+      access.appendChild(hideBtn);
+    }
+
     async function refreshEvents() {
       const res = await fetch('/admin/events', { cache: 'no-store' });
       const data = await res.json();
@@ -1422,6 +1584,13 @@
             refreshEvents();
           });
           row.append(roundsInput, roundsSaveBtn);
+
+          const accessBtn = document.createElement('button');
+          accessBtn.type = 'button';
+          accessBtn.className = 'btn ghost sm';
+          accessBtn.textContent = 'Show access codes';
+          accessBtn.addEventListener('click', () => showAccess(e.id));
+          row.appendChild(accessBtn);
         }
 
         if (e.status !== 'active' && e.id === data.current_event_id) {
@@ -1470,7 +1639,7 @@
       }
     });
 
-    adminBody.append(nameInput, createBtn, msg, list);
+    adminBody.append(nameInput, createBtn, msg, list, access);
     refreshEvents();
   }
 

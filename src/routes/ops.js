@@ -116,6 +116,31 @@ export function registerOpsRoutes(app, { db, q }) {
     ON CONFLICT(event_id, number) DO UPDATE SET phase = 'PUBLISHED', published_leaderboard = excluded.published_leaderboard
   `);
   const setEventRoundPhase = db.prepare("UPDATE event_state SET round_phase = 'PUBLISHED' WHERE event_id = ?");
+  // Publishing waits for marking (CLAUDE.md #7) — but warns rather than
+  // blocks, so a host can force it and move on (technical-design §2.5).
+  const getRoundUnmarkedCount = db.prepare(`
+    SELECT COUNT(*) AS n FROM answers a JOIN questions q ON q.id = a.question_id
+    WHERE q.event_id = ? AND q.round = ? AND q.type = 'text' AND a.is_correct IS NULL
+  `);
+  const getRoundQuestionCount = db.prepare(
+    'SELECT COUNT(*) AS n FROM questions WHERE event_id = ? AND round = ? AND is_practice = 0 AND is_reserve = 0'
+  );
+  // Never opened by publish time = SKIPPED, excluded from the points total
+  // (technical-design §12.3). opened_at is stamped on first open and never
+  // cleared, so it's exactly "was this ever asked".
+  const getRoundUnaskedCount = db.prepare(`
+    SELECT COUNT(*) AS n FROM questions
+    WHERE event_id = ? AND round = ? AND is_practice = 0 AND is_reserve = 0 AND opened_at IS NULL
+  `);
+  const skipUnaskedInRound = db.prepare(`
+    UPDATE questions SET is_skipped = 1
+    WHERE event_id = ? AND round = ? AND is_practice = 0 AND is_reserve = 0 AND opened_at IS NULL
+  `);
+  // A skipped question the host goes back and actually asks counts again.
+  const unskipQuestion = db.prepare('UPDATE questions SET is_skipped = 0 WHERE id = ?');
+  const getRoundPublished = db.prepare(
+    "SELECT 1 FROM rounds WHERE event_id = ? AND number = ? AND phase = 'PUBLISHED'"
+  );
 
   app.get('/ops', async (req, reply) => {
     if (!readOpsSession(req)) {
@@ -220,6 +245,11 @@ export function registerOpsRoutes(app, { db, q }) {
 
     const practiceQuestion = questions.find((qu) => qu.is_practice);
 
+    // The round the host would publish next: the current question's, if
+    // it's a real round question (practice/reserve sit outside rounds).
+    const publishRound = current && current.round != null && !current.is_practice && !current.is_reserve
+      ? current.round : null;
+
     return {
       version: event.version,
       phase,
@@ -242,8 +272,15 @@ export function registerOpsRoutes(app, { db, q }) {
       tables_live: { live: getLiveCount.get(event.id, PRESENCE_WINDOW_MS).n, total: getTeamCount.get(event.id).n },
       questions: questions.map((qu) => ({
         id: qu.id, round: qu.round, order_no: qu.order_no, type: qu.type,
-        prompt: qu.prompt, points: qu.points, is_practice: !!qu.is_practice, is_reserve: !!qu.is_reserve
+        prompt: qu.prompt, points: qu.points, is_practice: !!qu.is_practice, is_reserve: !!qu.is_reserve,
+        is_skipped: !!qu.is_skipped
       })),
+      publish: publishRound != null ? {
+        round: publishRound,
+        published: !!getRoundPublished.get(event.id, publishRound),
+        unmarked: getRoundUnmarkedCount.get(event.id, publishRound).n,
+        unasked: getRoundUnaskedCount.get(event.id, publishRound).n
+      } : null,
       preflight: phase === 'preflight' ? {
         question_count: questions.length,
         av_cue_count: questions.filter((qu) => qu.av_cue).length,
@@ -305,7 +342,10 @@ export function registerOpsRoutes(app, { db, q }) {
       // acting legitimately in opposite directions; the host wins
       // (technical-design §6.2).
       if (isReopen) deleteMarkingClaim.run(questionId);
-      if (targetState === 'OPEN') markOpened.run(new Date().toISOString(), questionId);
+      if (targetState === 'OPEN') {
+        markOpened.run(new Date().toISOString(), questionId);
+        if (question.is_skipped) unskipQuestion.run(questionId);
+      }
       if (targetState === 'REVEALED') markRevealed.run(new Date().toISOString(), questionId);
       logAudit({
         eventId: event.id, role: 'host', operator: ops.name, action: 'setQuestion',
@@ -386,26 +426,38 @@ export function registerOpsRoutes(app, { db, q }) {
 
     const round = Number(req.body?.round);
     if (!Number.isInteger(round) || round < 1) return reply.code(400).send({ error: 'round_required' });
+    if (getRoundQuestionCount.get(event.id, round).n === 0) {
+      return reply.code(400).send({ error: 'unknown_round' });
+    }
 
-    const scores = getScores.all(event.id).map((r) => ({
-      team_id: r.team_id, table_number: r.table_number,
-      team_name: r.team_name || `Table ${r.table_number}`,
-      colour: r.colour ? JSON.parse(r.colour) : null,
-      score: r.answer_points + r.bonus_points
-    }));
+    const force = req.body?.force === true;
+    const unmarked = getRoundUnmarkedCount.get(event.id, round).n;
+    if (unmarked > 0 && !force) {
+      return reply.code(409).send({ error: 'unmarked_answers', unmarked });
+    }
 
-    const newVersion = db.transaction(() => {
+    const result = db.transaction(() => {
+      const skipped = skipUnaskedInRound.run(event.id, round).changes;
+      const scores = getScores.all(event.id).map((r) => ({
+        team_id: r.team_id, table_number: r.table_number,
+        team_name: r.team_name || `Table ${r.table_number}`,
+        colour: r.colour ? JSON.parse(r.colour) : null,
+        score: r.answer_points + r.bonus_points
+      }));
       upsertRound.run(event.id, round, JSON.stringify(scores));
       setEventRoundPhase.run(event.id);
       const { version } = q.bumpEventVersion.get(event.id);
+      const notes = [`${scores.length} teams`];
+      if (skipped) notes.push(`${skipped} skipped`);
+      if (unmarked) notes.push(`forced with ${unmarked} unmarked`);
       logAudit({
         eventId: event.id, role: 'host', operator: ops.name, action: 'publishRound',
-        target: `round:${round}`, reason: `${scores.length} teams`
+        target: `round:${round}`, reason: notes.join(', ')
       });
-      return version;
+      return { version, skipped };
     })();
 
-    return { ok: true, version: newVersion };
+    return { ok: true, version: result.version, skipped: result.skipped };
   });
 
   // --- host: scores, bonuses, table support (CLAUDE.md #13, scope §2) ----
