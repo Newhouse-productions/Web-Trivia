@@ -3,7 +3,7 @@
 Trivia night app. 30 tables, ~240 phones, three hours, no chance to debug live.
 Multi-event capable: many configured, exactly one active at a time.
 
-Full spec lives in `docs/scope.md` and `docs/technical-design.md`. Read both before changing
+Full spec lives in `docs/trivia-night-scope.md` and `docs/trivia-technical-design.md`. Read both before changing
 architecture. This file holds the invariants that are easy to break by accident.
 
 ---
@@ -171,8 +171,9 @@ Three separate pages sharing a stylesheet and a poll helper: `/t/:token` (player
 snapshot.
 
 **Resist adding dependencies.** Every package is something that can break at 6pm on the day.
-Current justified set: `fastify`, `@fastify/cookie`, `@fastify/rate-limit`, `better-sqlite3`,
-`sharp`, `csv-parse`.
+Current justified set: `fastify`, `@fastify/cookie`, `better-sqlite3`,
+`sharp`, `csv-parse`, `qrcode` (QR sheet). Rate limiting is in-house
+(`src/pinLimiter.js`, `src/passphraseLimiter.js`), not `@fastify/rate-limit`.
 
 **Do not introduce:** a bundler, a frontend framework, an ORM, a session store, Redis, a
 queue, websockets, or SSE. Each was considered and rejected in the design docs.
@@ -209,10 +210,10 @@ drop every claim and let two markers onto the same question.
 
 ## Priorities
 
-`docs/scope.md` §10 lists P0/P1/P2. Build P0 first and completely. Alias matching is listed
+`docs/trivia-night-scope.md` §6 lists P0/P1/P2. Build P0 first and completely. Alias matching is listed
 P1 but behaves like P0 — build it alongside the marking queue, never after.
 
-Done means the dry run in `docs/scope.md` §11 passes, not that the features exist.
+Done means the dry run in `docs/trivia-night-scope.md` §7 passes, not that the features exist.
 
 ## Build order
 
@@ -264,7 +265,7 @@ Poll at 3000 ± 500ms with jittered exponential backoff on failure. Media is ser
 digits with a global per-role lockout as well as per-session backoff.
 
 Timer off, leaderboard every round, images uploaded and compressed, player poll 3s, operator
-poll 1s. All are settings in `docs/scope.md` §3 and `docs/technical-design.md` §16 — read
+poll 1s. All are settings in `docs/trivia-night-scope.md` §2 and `docs/trivia-technical-design.md` §21 — read
 them from config, never hardcode.
 
 No scope decisions are open. Anything new is a change: raise it rather than picking silently.
