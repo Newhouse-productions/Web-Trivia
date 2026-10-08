@@ -1835,8 +1835,9 @@
         });
         const impact = await res2.json();
         msg.className = 'note';
-        msg.textContent = `${impact.flipped_to_correct} tables wrong→correct, ${impact.flipped_to_wrong} correct→wrong, ` +
-          `${impact.unaffected} unaffected, ${impact.points_delta >= 0 ? '+' : ''}${impact.points_delta} points.` +
+        msg.textContent = `${impact.tables_affected} tables' scores change: ${impact.flipped_to_correct} wrong→correct, ` +
+          `${impact.flipped_to_wrong} correct→wrong, ${impact.requeued} back to marking, ` +
+          `${impact.points_delta >= 0 ? '+' : ''}${impact.points_delta} points in total.` +
           (impact.needs_republish ? ' A published round will need re-publishing.' : '');
         confirmed = true;
       });
@@ -1897,10 +1898,31 @@
         label.textContent = `Table ${t.table_number} — ${t.seats} seats${t.archived ? ' (archived)' : ''}`;
         row.appendChild(label);
         if (!t.archived) {
+          // Two taps: the first arms it, the second issues the new code —
+          // the old printed QR stops working the moment it lands.
+          const reissueBtn = document.createElement('button');
+          reissueBtn.type = 'button';
+          reissueBtn.className = 'btn ghost sm';
+          reissueBtn.style.marginLeft = 'auto';
+          reissueBtn.textContent = 'New code';
+          let armed = false;
+          reissueBtn.addEventListener('click', async () => {
+            if (!armed) {
+              armed = true;
+              reissueBtn.textContent = 'Confirm — old QR stops working';
+              return;
+            }
+            const res = await fetch(`/admin/tables/${t.id}/reissue`, { method: 'POST' });
+            msg.textContent = res.ok
+              ? `Table ${t.table_number} has a new code. Phones already joined keep working; reprint its QR card.`
+              : 'Could not issue a new code.';
+            refreshTables();
+          });
+          row.appendChild(reissueBtn);
+
           const archiveBtn = document.createElement('button');
           archiveBtn.type = 'button';
           archiveBtn.className = 'btn ghost sm';
-          archiveBtn.style.marginLeft = 'auto';
           archiveBtn.textContent = 'Archive';
           archiveBtn.addEventListener('click', async () => {
             await fetch(`/admin/tables/${t.id}/archive`, { method: 'POST' });
@@ -2362,9 +2384,54 @@
     cbody.append(attentionHeading, attention);
     floorEls.attention = attention;
 
+    // This operator's own actions tonight (scope §4) — loaded on entry,
+    // since every floor action returns here via startFloor.
+    const logRule = document.createElement('hr');
+    logRule.className = 'rule';
+    const logHeading = document.createElement('div');
+    logHeading.className = 'label';
+    logHeading.style.marginBottom = 'var(--s2)';
+    logHeading.textContent = 'Your actions';
+    const log = document.createElement('div');
+    log.className = 'stack';
+    cbody.append(logRule, logHeading, log);
+    loadFloorLog(log);
+
     refreshFloor();
     floorPollHandle = window.Poll.start({
       vUrl: '/floor/v', stateUrl: '/floor/teams', intervalMs: 3000, onState: renderFloor
+    });
+  }
+
+  const FLOOR_ACTION_LABELS = {
+    renameTeam: 'Renamed', reassignCaptain: 'Captain changed', answerOnBehalf: 'Answer entered'
+  };
+
+  async function loadFloorLog(container) {
+    const res = await fetch('/floor/log', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    clear(container);
+    if (!data.entries.length) {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = 'Nothing yet.';
+      container.appendChild(p);
+      return;
+    }
+    data.entries.forEach((e) => {
+      const row = document.createElement('div');
+      row.className = 'tile flat';
+      const what = document.createElement('span');
+      const team = /team:(\d+)/.exec(e.target || '');
+      what.textContent = `${FLOOR_ACTION_LABELS[e.action] || e.action}${e.reason ? ' — ' + e.reason : ''}`;
+      const when = document.createElement('span');
+      when.className = 'label num';
+      when.style.marginLeft = 'auto';
+      when.textContent = new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      row.append(what, when);
+      if (team) row.title = `Team id ${team[1]}`;
+      container.appendChild(row);
     });
   }
 
@@ -2468,6 +2535,56 @@
     info.className = 'tile flat';
     info.textContent = `Players: ${data.players.map((p) => p.username).join(', ') || 'none yet'}`;
     cbody.appendChild(info);
+
+    // Runbook step one for a table that can't connect: show the code and
+    // passphrase (scope §8). Hidden until asked — this screen is read over
+    // shoulders in a crowded room.
+    const joinWrap = document.createElement('div');
+    joinWrap.className = 'stack';
+    joinWrap.style.marginTop = 'var(--s3)';
+    const joinBtn = document.createElement('button');
+    joinBtn.type = 'button';
+    joinBtn.className = 'btn ghost wide';
+    joinBtn.textContent = 'Show join code';
+    joinBtn.addEventListener('click', () => {
+      clear(joinWrap);
+      const qr = document.createElement('img');
+      qr.src = data.join.qr;
+      qr.alt = `QR code to join table ${data.team.table_number}`;
+      qr.style.width = '240px';
+      qr.style.maxWidth = '100%';
+      qr.style.background = '#fff';
+      qr.style.padding = 'var(--s2)';
+      qr.style.borderRadius = '8px';
+      const code = document.createElement('div');
+      code.className = 'tile flat';
+      const codeKey = document.createElement('span');
+      codeKey.className = 'label';
+      codeKey.textContent = 'Address';
+      const codeVal = document.createElement('span');
+      codeVal.className = 'num';
+      codeVal.style.marginLeft = 'auto';
+      codeVal.style.wordBreak = 'break-all';
+      codeVal.textContent = `${location.origin}/t/${data.join.code}`;
+      code.append(codeKey, codeVal);
+      const pass = document.createElement('div');
+      pass.className = 'tile flat';
+      const passKey = document.createElement('span');
+      passKey.className = 'label';
+      passKey.textContent = 'Passphrase';
+      const passVal = document.createElement('span');
+      passVal.style.marginLeft = 'auto';
+      passVal.textContent = data.join.passphrase;
+      pass.append(passKey, passVal);
+      const hide = document.createElement('button');
+      hide.type = 'button';
+      hide.className = 'btn ghost sm';
+      hide.textContent = 'Hide';
+      hide.addEventListener('click', () => { clear(joinWrap); joinWrap.appendChild(joinBtn); });
+      joinWrap.append(qr, code, pass, hide);
+    });
+    joinWrap.appendChild(joinBtn);
+    cbody.appendChild(joinWrap);
 
     const stack = document.createElement('div');
     stack.className = 'stack';

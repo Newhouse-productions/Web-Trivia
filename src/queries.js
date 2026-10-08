@@ -45,7 +45,7 @@ export function buildQueries(db) {
   const getCurrentQuestion = db.prepare(`
     SELECT es.question_status, q.id AS question_id, q.event_id, q.round, q.type, q.prompt,
            q.options, q.correct_answer, q.aliases, q.points, q.image_ref, q.image_alt,
-           q.video_url, q.av_cue, q.is_practice, q.theme, q.opened_at
+           q.video_url, q.av_cue, q.is_practice, q.theme, q.opened_at, q.timer_paused_ms
     FROM event_state es
     JOIN questions q ON q.id = es.current_question_id
     WHERE es.event_id = ?
@@ -67,11 +67,26 @@ export function buildQueries(db) {
   // it on/off, not change the length (deferred). Only shown while the
   // question is actually OPEN — once closed/revealed a stale countdown adds
   // nothing.
+  //
+  // Pause stops the timer (CLAUDE.md #17): while paused there is no timer
+  // at all, and time spent paused is added to timer_paused_ms on resume,
+  // so the countdown carries on from where it stopped. opened_at itself is
+  // never rewritten — it's the first-open stamp other things depend on.
   const TIMER_SECONDS = 60;
-  function resolveTimer(event, openedAt, questionStatus) {
-    if (!openedAt || questionStatus !== 'OPEN') return null;
+  function resolveTimer(event, question, questionStatus) {
+    if (!question?.opened_at || questionStatus !== 'OPEN' || event.paused) return null;
     if (getSettings(event.id).timer_enabled !== 'true') return null;
-    return { opened_at: openedAt, duration_seconds: TIMER_SECONDS };
+    const startedMs = new Date(question.opened_at).getTime() + (question.timer_paused_ms || 0);
+    return { opened_at: new Date(startedMs).toISOString(), duration_seconds: TIMER_SECONDS };
+  }
+
+  // Round 1 has started once any real (non-practice) question has opened —
+  // the same test the host's pre-flight phase and the big screen use.
+  const getAnyRealQuestionOpened = db.prepare(
+    'SELECT 1 FROM questions WHERE event_id = ? AND is_practice = 0 AND opened_at IS NOT NULL LIMIT 1'
+  );
+  function roundOneStarted(eventId) {
+    return !!getAnyRealQuestionOpened.get(eventId);
   }
 
   // Resolved server-side; the client never sees the cascade (CLAUDE.md #21).
@@ -149,10 +164,13 @@ export function buildQueries(db) {
   }
 
   const getAnswer = db.prepare('SELECT * FROM answers WHERE team_id = ? AND question_id = ?');
-  // Scores are derived on read, never stored (CLAUDE.md #13).
+  // Scores are derived on read, never stored (CLAUDE.md #13). Practice and
+  // reserve questions never count — same rule as the leaderboard in
+  // routes/ops.js, so the phone's score always matches the board.
   const getTeamScore = db.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 THEN q.points ELSE 0 END), 0) AS answer_points,
+      COALESCE(SUM(CASE WHEN a.is_correct = 1 AND q.is_skipped = 0 AND q.is_practice = 0 AND q.is_reserve = 0
+                   THEN q.points ELSE 0 END), 0) AS answer_points,
       (SELECT COALESCE(SUM(points), 0) FROM bonuses b WHERE b.team_id = ?) AS bonus_points
     FROM answers a JOIN questions q ON q.id = a.question_id
     WHERE a.team_id = ?
@@ -248,7 +266,7 @@ export function buildQueries(db) {
     getEventState, setEventStateQuestion, setRoundPhase, getPublishedRound,
     getCurrentQuestion, getQuestionById, getQuestionsForEvent,
     getAnswer, upsertAnswer, getTeamsForEvent, resolveMediaUrl, teamScore, resolveCurrentTheme, resolveChrome,
-    allResolvedThemes, getSettings, resolveTimer, resolveRoundTheme,
+    allResolvedThemes, getSettings, resolveTimer, resolveRoundTheme, roundOneStarted,
     resolveSessionContext, playerQuestionPayload, playerAnswerPayload, hostQuestionPayload
   };
 }

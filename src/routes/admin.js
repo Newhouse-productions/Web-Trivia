@@ -140,7 +140,7 @@ export function registerAdminRoutes(app, { db, q }) {
     // Move this session into the new event so admin can start configuring
     // it immediately — creating it is the authorization, no PIN re-entry.
     const newEvent = q.getEventById.get(newEventId);
-    writeOpsSession(reply, { sid: ops.sid, eventId: newEventId, role: 'admin', name: ops.name });
+    writeOpsSession(reply, { sid: ops.sid, eventId: newEventId, role: 'admin', name: ops.name, iat: ops.iat });
     return {
       ok: true, event_id: newEventId,
       pins: { host: newEvent.host_pin, marker: newEvent.marker_pin, floor: newEvent.floor_pin, admin: newEvent.admin_pin }
@@ -276,9 +276,16 @@ export function registerAdminRoutes(app, { db, q }) {
   // "Never re-score silently." Editing OPEN is blocked outright; editing a
   // revealed question requires a preview (tables and points) before commit.
 
-  const getAnswersForQuestion2 = db.prepare('SELECT team_id, value, is_correct FROM answers WHERE question_id = ?');
+  const getAnswersForQuestion2 = db.prepare(
+    'SELECT team_id, value, is_correct, marked_by FROM answers WHERE question_id = ?'
+  );
   const setMarkForRescore = db.prepare(
     'UPDATE answers SET is_correct = ? WHERE team_id = ? AND question_id = ?'
+  );
+  // Back to the marking queue: clear who marked it too, so the next re-score
+  // doesn't mistake it for a marker's judgement.
+  const requeueForRescore = db.prepare(
+    'UPDATE answers SET is_correct = NULL, marked_by = NULL, marked_at = NULL WHERE team_id = ? AND question_id = ?'
   );
   const getAnyPublishedFromRound = db.prepare(
     "SELECT COUNT(*) AS n FROM rounds WHERE event_id = ? AND number >= ? AND phase = 'PUBLISHED'"
@@ -292,24 +299,51 @@ export function registerAdminRoutes(app, { db, q }) {
 
   function normalize(s) { return String(s || '').trim().toLowerCase(); }
 
+  // A marker's own judgement — not an auto-match at submission (marked_by
+  // NULL) and not a bulk alias acceptance ('alias:<marker>').
+  const isHumanMark = (a) => a.is_correct !== null && a.marked_by && !a.marked_by.startsWith('alias:');
+
   // What would change if this question's answer key became {correctAnswer,
-  // aliases} — used both for the preview and to actually apply the re-score,
-  // so the number shown is exactly the number that lands.
-  function computeRescore(question, correctAnswer, aliases) {
+  // aliases} and its value became newPoints — used both for the preview
+  // and to actually apply the re-score, so the number shown is exactly the
+  // number that lands (CLAUDE.md #14).
+  //
+  // Free text: an answer the new key accepts is correct. One it doesn't
+  // keep a marker's own judgement — accepting "Paris, France" by hand
+  // must survive an alias edit — and anything that was only auto-matched
+  // goes back to the marking queue rather than silently scoring zero.
+  function computeRescore(question, correctAnswer, aliases, newPoints = question.points) {
     const accepted = new Set([normalize(correctAnswer), ...aliases.map(normalize)]);
     const rows = getAnswersForQuestion2.all(question.id);
     const changes = rows.map((a) => {
-      const newCorrect = question.type === 'mcq' ? (a.value === correctAnswer ? 1 : 0)
-        : (accepted.has(normalize(a.value)) ? 1 : null);
-      return { team_id: a.team_id, was: a.is_correct, now: newCorrect, changed: a.is_correct !== newCorrect };
+      let newCorrect;
+      if (question.type === 'mcq') newCorrect = a.value === correctAnswer ? 1 : 0;
+      else if (accepted.has(normalize(a.value))) newCorrect = 1;
+      else newCorrect = isHumanMark(a) ? a.is_correct : null;
+      const pointsBefore = a.is_correct === 1 ? question.points : 0;
+      const pointsAfter = newCorrect === 1 ? newPoints : 0;
+      return {
+        team_id: a.team_id, was: a.is_correct, now: newCorrect,
+        changed: a.is_correct !== newCorrect, points_change: pointsAfter - pointsBefore
+      };
     });
     const flippedToCorrect = changes.filter((c) => c.changed && c.now === 1 && c.was !== 1);
     const flippedToWrong = changes.filter((c) => c.changed && c.was === 1 && c.now !== 1);
-    const pointsDelta = (flippedToCorrect.length - flippedToWrong.length) * question.points;
+    const requeued = changes.filter((c) => c.changed && c.now === null);
+    const scoreChanged = changes.filter((c) => c.points_change !== 0);
     return {
       changes, flipped_to_correct: flippedToCorrect.length, flipped_to_wrong: flippedToWrong.length,
-      unaffected: changes.length - flippedToCorrect.length - flippedToWrong.length, points_delta: pointsDelta
+      requeued: requeued.length,
+      tables_affected: scoreChanged.length,
+      unaffected: changes.length - scoreChanged.length,
+      points_delta: changes.reduce((sum, c) => sum + c.points_change, 0)
     };
+  }
+
+  function parsePoints(raw, fallback) {
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 0 ? n : NaN;
   }
 
   app.get('/admin/questions/:id', async (req, reply) => {
@@ -341,11 +375,14 @@ export function registerAdminRoutes(app, { db, q }) {
 
     const correctAnswer = String(req.body?.correct_answer ?? question.correct_answer);
     const aliases = req.body?.aliases ?? (question.aliases ? JSON.parse(question.aliases) : []);
-    const impact = computeRescore(question, correctAnswer, aliases);
+    const points = parsePoints(req.body?.points, question.points);
+    if (Number.isNaN(points)) return reply.code(400).send({ error: 'invalid_points' });
+    const impact = computeRescore(question, correctAnswer, aliases, points);
     const needsRepublish = getAnyPublishedFromRound.get(event.id, question.round ?? 0).n > 0;
     return {
-      tables_affected: impact.flipped_to_correct + impact.flipped_to_wrong,
+      tables_affected: impact.tables_affected,
       flipped_to_correct: impact.flipped_to_correct, flipped_to_wrong: impact.flipped_to_wrong,
+      requeued: impact.requeued,
       unaffected: impact.unaffected, points_delta: impact.points_delta, needs_republish: needsRepublish
     };
   });
@@ -366,9 +403,15 @@ export function registerAdminRoutes(app, { db, q }) {
     const aliases = body.aliases ?? (question.aliases ? JSON.parse(question.aliases) : []);
     const answerKeyChanged = correctAnswer !== question.correct_answer ||
       JSON.stringify(aliases) !== JSON.stringify(question.aliases ? JSON.parse(question.aliases) : []);
+    const points = parsePoints(body.points, question.points);
+    if (Number.isNaN(points)) return reply.code(400).send({ error: 'invalid_points' });
+    // A points change re-scores every table that got it right — as much a
+    // re-score as a new answer key (CLAUDE.md #14).
+    const pointsChanged = points !== question.points;
+    const scoringChanged = answerKeyChanged || pointsChanged;
 
     const hasAnswers = getAnswersForQuestion2.all(question.id).length > 0;
-    if (hasAnswers && answerKeyChanged && !body.confirm) {
+    if (hasAnswers && scoringChanged && !body.confirm) {
       // Never re-score silently — the caller must have seen the impact
       // preview and confirmed it (CLAUDE.md #14).
       return reply.code(428).send({ error: 'confirm_required', message: 'Preview the impact and confirm before saving.' });
@@ -381,27 +424,33 @@ export function registerAdminRoutes(app, { db, q }) {
         body.options !== undefined ? JSON.stringify(body.options) : question.options,
         correctAnswer,
         JSON.stringify(aliases),
-        body.points ?? question.points,
+        points,
         body.image_ref ?? question.image_ref, body.image_alt ?? question.image_alt,
         body.video_url ?? question.video_url, body.av_cue ?? question.av_cue,
         question.id, event.id
       );
 
       let impact = null;
-      if (answerKeyChanged && hasAnswers) {
-        impact = computeRescore(question, correctAnswer, aliases);
+      if (scoringChanged && hasAnswers) {
+        impact = computeRescore(question, correctAnswer, aliases, points);
         for (const c of impact.changes) {
           if (c.changed) {
-            setMarkForRescore.run(c.now, c.team_id, question.id);
-            q.bumpTableVersion.run(c.team_id);
+            if (c.now === null) requeueForRescore.run(c.team_id, question.id);
+            else setMarkForRescore.run(c.now, c.team_id, question.id);
           }
+          // A points change moves a table's score without flipping its mark.
+          if (c.changed || c.points_change) q.bumpTableVersion.run(c.team_id);
         }
       }
 
       logAudit({
         eventId: event.id, role: 'admin', operator: ops.name, action: 'editQuestion',
         target: `question:${question.id}`,
-        reason: impact ? `re-scored: +${impact.flipped_to_correct}/-${impact.flipped_to_wrong} tables` : 'content edit'
+        reason: impact
+          ? `re-scored: +${impact.flipped_to_correct}/-${impact.flipped_to_wrong} tables, ` +
+            `${impact.requeued} re-queued, ${impact.points_delta >= 0 ? '+' : ''}${impact.points_delta} points` +
+            (pointsChanged ? ` (points ${question.points} -> ${points})` : '')
+          : 'content edit'
       });
       return impact;
     })();
@@ -529,9 +578,58 @@ export function registerAdminRoutes(app, { db, q }) {
     return { ok: true };
   });
 
+  // Reissue a table's code (scope §5, table support) — for a code that has
+  // leaked or been shared with the wrong table. Phones already at the table
+  // keep working: their session cookie carries the team id, not the token
+  // (CLAUDE.md #4). Only the old QR stops working, so reprint that card.
+  const setTeamToken = db.prepare('UPDATE teams SET token = ? WHERE id = ?');
+
+  app.post('/admin/tables/:id/reissue', async (req, reply) => {
+    const event = requireAdmin(req, reply);
+    if (!event) return;
+    const team = q.getTeamById.get(Number(req.params.id));
+    if (!team || team.event_id !== event.id || team.archived) return reply.code(404).send({ error: 'not_found' });
+
+    db.transaction(() => {
+      setTeamToken.run(randomToken(8), team.id);
+      logAudit({
+        eventId: event.id, role: 'admin', operator: readOpsSession(req).name, action: 'reissueCode',
+        target: `team:${team.id}`, reason: `table ${team.table_number}`
+      });
+    })();
+    return { ok: true };
+  });
+
   // --- QR sheet: one code per table, built from the live request host,
   // never stored (CLAUDE.md #3) — a restart with a new tunnel hostname
   // just means reprinting, not a broken link.
+
+  // The sheet's styles live in their own file: the app's CSP is
+  // style-src 'self', which blocks an inline <style> block and style=""
+  // attributes (CLAUDE.md #2). Team colour swatches are SVG fills instead.
+  const QR_SHEET_CSS = `
+  body { font-family: system-ui, sans-serif; margin: 24px; }
+  .sheet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+  .qr svg { width: 100%; height: auto; }
+  .num { font-size: 22px; font-weight: 700; margin-top: 8px; }
+  .swatch { display: block; width: 100%; height: 10px; margin-bottom: 10px; }
+  @media print { body { margin: 0; } .intro { display: none; } .card { border: 1px solid #999; } }
+`;
+  app.get('/qr-sheet.css', async (req, reply) => reply.type('text/css').send(QR_SHEET_CSS));
+
+  function swatchSvg(colour, id) {
+    if (!colour?.from) return '';
+    const from = escapeHtml(colour.from);
+    if (colour.type === 'gradient' && colour.to) {
+      return `<svg class="swatch" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">` +
+        `<defs><linearGradient id="g${id}"><stop offset="0" stop-color="${from}"/>` +
+        `<stop offset="1" stop-color="${escapeHtml(colour.to)}"/></linearGradient></defs>` +
+        `<rect width="100" height="10" rx="2" fill="url(#g${id})"/></svg>`;
+    }
+    return `<svg class="swatch" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">` +
+      `<rect width="100" height="10" rx="2" fill="${from}"/></svg>`;
+  }
 
   app.get('/admin/tables/qr-sheet', async (req, reply) => {
     const event = requireAdmin(req, reply);
@@ -542,33 +640,22 @@ export function registerAdminRoutes(app, { db, q }) {
     ).all(event.id);
 
     const base = baseUrl(req);
-    const cards = await Promise.all(tables.map(async (t) => {
+    const cards = await Promise.all(tables.map(async (t, i) => {
       const url = `${base}/t/${t.token}`;
       const svg = await QRCode.toString(url, { type: 'svg', margin: 1, width: 220 });
       const colour = t.colour ? JSON.parse(t.colour) : null;
       // Printed card carries the same identifier swatch as everywhere else
       // (CLAUDE.md #18) — table number stays in plain text beside it.
-      const swatch = colour
-        ? `<div class="swatch" style="background:${colour.type === 'gradient'
-            ? `linear-gradient(135deg, ${colour.from}, ${colour.to})` : colour.from}"></div>`
-        : '';
+      const swatch = swatchSvg(colour, i);
       return `<div class="card">${swatch}<div class="qr">${svg}</div><div class="num">Table ${escapeHtml(t.table_number)}</div></div>`;
     }));
 
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>QR sheet — ${escapeHtml(event.name)}</title>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 24px; }
-  .sheet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-  .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; text-align: center; page-break-inside: avoid; position: relative; }
-  .qr svg { width: 100%; height: auto; }
-  .num { font-size: 22px; font-weight: 700; margin-top: 8px; }
-  .swatch { width: 100%; height: 10px; border-radius: 4px; margin-bottom: 10px; }
-  @media print { .card { border: 1px solid #999; } }
-</style>
+<link rel="stylesheet" href="/qr-sheet.css">
 </head><body>
 <h1>${escapeHtml(event.name)} — ${tables.length} tables</h1>
-<p>Print this page. One code per table; the table number appears in plain text beside it so anyone can confirm they scanned their own.</p>
+<p class="intro">Print this page. One code per table; the table number appears in plain text beside it so anyone can confirm they scanned their own.</p>
 <div class="sheet">${cards.join('')}</div>
 </body></html>`;
 
@@ -846,7 +933,7 @@ export function registerAdminRoutes(app, { db, q }) {
     // import is the only moment they're knowable (CLAUDE.md #6: always
     // regenerated, never the old ones).
     const newEvent = q.getEventById.get(newEventId);
-    writeOpsSession(reply, { sid: ops.sid, eventId: newEventId, role: 'admin', name: ops.name });
+    writeOpsSession(reply, { sid: ops.sid, eventId: newEventId, role: 'admin', name: ops.name, iat: ops.iat });
     return {
       ok: true, event_id: newEventId, status: 'draft',
       pins: { host: newEvent.host_pin, marker: newEvent.marker_pin, floor: newEvent.floor_pin, admin: newEvent.admin_pin }

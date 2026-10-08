@@ -491,6 +491,34 @@
     pbody.appendChild(note);
     playEls.note = note;
 
+    // Team name — the captain can set it until round 1 starts (scope §2).
+    // Built once like the answer field, so a poll never wipes what's typed.
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'stack';
+    nameWrap.style.display = 'none';
+    nameWrap.style.marginTop = 'var(--s5)';
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'label';
+    nameLabel.textContent = 'Team name';
+    nameLabel.htmlFor = 'team-name';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'field';
+    nameInput.id = 'team-name';
+    nameInput.maxLength = 32;
+    nameInput.autocomplete = 'off';
+    nameInput.addEventListener('input', () => { nameInput.dataset.dirty = '1'; });
+    const nameSave = document.createElement('button');
+    nameSave.type = 'button';
+    nameSave.className = 'btn ghost wide';
+    nameSave.textContent = 'Save team name';
+    const nameMsg = document.createElement('p');
+    nameMsg.className = 'note';
+    nameSave.addEventListener('click', () => saveTeamName(nameInput, nameMsg));
+    nameWrap.append(nameLabel, nameInput, nameSave, nameMsg);
+    pbody.appendChild(nameWrap);
+    playEls.nameWrap = nameWrap;
+    playEls.nameInput = nameInput;
+
     const syncBtn = document.createElement('button');
     syncBtn.type = 'button';
     syncBtn.className = 'btn ghost sm';
@@ -567,6 +595,12 @@
     }
 
     playEls.takeoverBtn.style.display = team.is_captain ? 'none' : '';
+
+    playEls.nameWrap.style.display = team.can_rename ? '' : 'none';
+    // Never overwrite what the captain is typing (CLAUDE.md #15).
+    if (document.activeElement !== playEls.nameInput && !playEls.nameInput.dataset.dirty) {
+      playEls.nameInput.value = team.team_name || '';
+    }
 
     playEls.roundEyebrow.textContent = state.round ? `Round ${state.round}` : '';
 
@@ -765,6 +799,30 @@
       playEls.note.textContent = 'This question is not open for answers.';
     } else {
       playEls.note.textContent = '';
+    }
+  }
+
+  async function saveTeamName(input, msg) {
+    try {
+      const res = await fetch('/team-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_name: input.value.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        delete input.dataset.dirty;
+        msg.textContent = data.team_name ? 'Team name saved.' : 'Team name cleared.';
+        announce(msg.textContent);
+        if (pollHandle) pollHandle.syncNow();
+      } else {
+        msg.textContent = data.error === 'rename_closed'
+          ? 'Round 1 has started — ask a host to change the name.'
+          : data.error === 'not_captain' ? 'Only the captain can change the team name.'
+          : 'Could not save the name. Try again.';
+      }
+    } catch {
+      msg.textContent = 'Could not reach the server. Try again.';
     }
   }
 

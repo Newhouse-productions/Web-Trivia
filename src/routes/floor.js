@@ -2,8 +2,15 @@
 // correct answers — that screen is readable over a shoulder in a crowded
 // room (technical-design §13.2). Every floor action is logged with a
 // reason and appears in the admin audit log.
+import QRCode from 'qrcode';
 import { readOpsSession } from '../opsSession.js';
 import { makeAuditLogger } from '../audit.js';
+
+// Built from the incoming request, never stored (CLAUDE.md #3).
+function baseUrl(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  return `${proto}://${req.headers.host}`;
+}
 
 export function registerFloorRoutes(app, { db, q }) {
   const logAudit = makeAuditLogger(db);
@@ -18,6 +25,11 @@ export function registerFloorRoutes(app, { db, q }) {
   const getTeamPlayers = db.prepare('SELECT id, username FROM players WHERE team_id = ? ORDER BY username');
   const setTeamName = db.prepare('UPDATE teams SET team_name = ? WHERE id = ?');
   const setCaptain = db.prepare('UPDATE teams SET captain_player_id = ? WHERE id = ?');
+  const getOwnActions = db.prepare(`
+    SELECT action, target, reason, at FROM audit
+    WHERE event_id = ? AND role = 'floor' AND operator IS ?
+    ORDER BY at DESC LIMIT 30
+  `);
 
   function requireFloor(req, reply) {
     const ops = readOpsSession(req);
@@ -68,6 +80,10 @@ export function registerFloorRoutes(app, { db, q }) {
         token: team.token, captain_player_id: team.captain_player_id
       },
       players: getTeamPlayers.all(team.id),
+      // "Show code and passphrase" is the runbook's first step for a table
+      // that can't connect (scope §8). The QR is served by team id, so the
+      // token never lands in an image URL.
+      join: { code: team.token, passphrase: ctx.event.passphrase, qr: `/floor/team/${team.id}/qr.svg` },
       // No correct_answer, no aliases — floor never sees them (§13.2).
       current_question: current ? {
         id: current.id, prompt: current.prompt, type: current.type,
@@ -76,6 +92,23 @@ export function registerFloorRoutes(app, { db, q }) {
       } : null,
       our_answer: ourAnswer ? { value: ourAnswer.value } : null
     };
+  });
+
+  // A QR the table's phone can scan straight off the floor phone.
+  app.get('/floor/team/:id/qr.svg', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    const team = q.getTeamById.get(Number(req.params.id));
+    if (!team || team.event_id !== ctx.event.id || team.archived) return reply.code(404).send({ error: 'not_found' });
+    const svg = await QRCode.toString(`${baseUrl(req)}/t/${team.token}`, { type: 'svg', margin: 1, width: 240 });
+    return reply.type('image/svg+xml').send(svg);
+  });
+
+  // Floor's own action log (scope §4) — what this operator did tonight.
+  app.get('/floor/log', async (req, reply) => {
+    const ctx = requireFloor(req, reply);
+    if (!ctx) return;
+    return { entries: getOwnActions.all(ctx.event.id, ctx.ops.name ?? null) };
   });
 
   app.post('/floor/rename', async (req, reply) => {

@@ -147,7 +147,7 @@ export function registerScreenRoutes(app, { db, q }) {
       chrome: q.resolveChrome(event, theme.colour),
       question: payload,
       join: joinInfo,
-      timer: q.resolveTimer(event, current.opened_at, current.question_status),
+      timer: q.resolveTimer(event, current, current.question_status),
       answered: { count: answeredTotal, total: teamTotal }
     };
   });

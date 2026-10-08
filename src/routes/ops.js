@@ -110,6 +110,9 @@ export function registerOpsRoutes(app, { db, q }) {
   `);
   const getBonusByKey = db.prepare('SELECT * FROM bonuses WHERE idempotency_key = ?');
   const setPaused = db.prepare('UPDATE events SET paused = ? WHERE id = ?');
+  const addTimerPausedMs = db.prepare(
+    'UPDATE questions SET timer_paused_ms = timer_paused_ms + ? WHERE id = ?'
+  );
   const upsertRound = db.prepare(`
     INSERT INTO rounds (event_id, number, phase, published_leaderboard)
     VALUES (?, ?, 'PUBLISHED', ?)
@@ -257,7 +260,7 @@ export function registerOpsRoutes(app, { db, q }) {
       round_phase: es.round_phase,
       paused: event.paused ? JSON.parse(event.paused) : null,
       theme: q.resolveCurrentTheme(event, current),
-      timer: q.resolveTimer(event, current?.opened_at, es.question_status),
+      timer: q.resolveTimer(event, current, es.question_status),
       round_progress: current && questionIndexInRound !== -1
         ? { number: current.round, index: questionIndexInRound + 1, total: roundQuestions.length }
         : null,
@@ -375,7 +378,10 @@ export function registerOpsRoutes(app, { db, q }) {
 
     const reason = String(req.body?.reason || '').trim().slice(0, 40);
     const message = String(req.body?.message || '').trim().slice(0, 200);
-    const paused = { at: new Date().toISOString(), by: ops.name, reason, message };
+    // Re-pausing to change the message keeps the original start time, so
+    // the timer credit on resume covers the whole pause.
+    const previousAt = event.paused ? JSON.parse(event.paused).at : null;
+    const paused = { at: previousAt || new Date().toISOString(), by: ops.name, reason, message };
 
     const newVersion = db.transaction(() => {
       setPaused.run(JSON.stringify(paused), event.id);
@@ -401,8 +407,17 @@ export function registerOpsRoutes(app, { db, q }) {
       return reply.code(409).send({ error: 'stale', current_version: event.version });
     }
 
+    // Time paused while a question was OPEN doesn't count against its
+    // timer — the countdown resumes where it stopped (CLAUDE.md #17).
+    const es = q.getEventState.get(event.id);
+    const pausedAt = event.paused ? Date.parse(JSON.parse(event.paused).at) : NaN;
+    const pausedMs = Number.isFinite(pausedAt) ? Math.max(0, Date.now() - pausedAt) : 0;
+
     const newVersion = db.transaction(() => {
       setPaused.run(null, event.id);
+      if (es.current_question_id && es.question_status === 'OPEN' && pausedMs) {
+        addTimerPausedMs.run(pausedMs, es.current_question_id);
+      }
       const { version } = q.bumpEventVersion.get(event.id);
       logAudit({ eventId: event.id, role: 'host', operator: ops.name, action: 'resume', target: 'event' });
       return version;

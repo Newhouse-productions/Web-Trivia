@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDb } from './db/index.js';
+import { readOpsSession, writeOpsSession } from './opsSession.js';
 import { buildQueries } from './queries.js';
 import { registerPlayerRoutes } from './routes/player.js';
 import { registerOpsRoutes } from './routes/ops.js';
@@ -30,7 +31,7 @@ const ARCHIVO_WOFF2 = readFileSync(join(PUBLIC_DIR, 'fonts', 'archivo-variable.w
 // Dynamic, per-request responses that must never be cached (CLAUDE.md
 // Conventions + #4/#5). Static assets above are exempt.
 const NO_STORE_PREFIXES = [
-  '/v', '/state', '/answer', '/gate', '/join', '/takeover',
+  '/v', '/state', '/answer', '/gate', '/join', '/takeover', '/team-name',
   '/host/', '/ops/', '/admin/', '/marker/', '/screen/', '/floor/'
 ];
 
@@ -40,6 +41,17 @@ export function buildApp() {
   const q = buildQueries(db);
 
   app.register(cookie, { secret: process.env.COOKIE_SECRET || 'dev-only-not-a-real-secret' });
+
+  // Admin is 2h *idle* (scope §2 "Sessions"): every authenticated admin
+  // request reissues the cookie with a fresh `seen`, keeping its iat. A
+  // handler that switches event rewrites the cookie again after this.
+  app.addHook('preHandler', (req, reply, done) => {
+    if (req.url.startsWith('/admin/')) {
+      const ops = readOpsSession(req);
+      if (ops && ops.role === 'admin') writeOpsSession(reply, ops);
+    }
+    done();
+  });
 
   app.addHook('onSend', (req, reply, payload, done) => {
     reply.header('Referrer-Policy', 'no-referrer');

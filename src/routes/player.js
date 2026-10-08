@@ -3,6 +3,7 @@
 import { randomToken } from '../tokens.js';
 import { readSession, writeSession } from '../session.js';
 import { checkLimiter, recordFailure, recordSuccess } from '../passphraseLimiter.js';
+import { makeAuditLogger } from '../audit.js';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -19,6 +20,9 @@ function messagePage(message) {
 }
 
 export function registerPlayerRoutes(app, { db, q }) {
+  const logAudit = makeAuditLogger(db);
+  const setTeamName = db.prepare('UPDATE teams SET team_name = ? WHERE id = ?');
+
   // --- token exchange (CLAUDE.md #4) --------------------------------------
 
   app.get('/t/:token', async (req, reply) => {
@@ -136,7 +140,7 @@ export function registerPlayerRoutes(app, { db, q }) {
       table_version: team.table_version,
       round: current ? current.round : null,
       theme: q.resolveCurrentTheme(event, current),
-      timer: q.resolveTimer(event, current?.opened_at, current?.question_status),
+      timer: q.resolveTimer(event, current, current?.question_status),
       question: current ? q.playerQuestionPayload(current) : null,
       our_answer: current ? q.playerAnswerPayload(ourAnswer, current.question_status) : null,
       team: {
@@ -145,6 +149,7 @@ export function registerPlayerRoutes(app, { db, q }) {
         colour: team.colour ? JSON.parse(team.colour) : null,
         score: q.teamScore(team.id),
         is_captain: team.captain_player_id === player.id,
+        can_rename: team.captain_player_id === player.id && !q.roundOneStarted(event.id),
         captain_player_id: team.captain_player_id,
         captain_name: captain ? captain.username : null
       }
@@ -249,6 +254,14 @@ export function registerPlayerRoutes(app, { db, q }) {
       const info = q.setCaptainCas.run(session.playerId, team.id, expectsCaptain);
       if (info.changes === 0) return false;
       q.bumpTableVersion.run(team.id);
+      // Handover is announced and logged (scope §2) — dispute evidence for
+      // "who was answering for table 12 when that went in".
+      const player = q.getPlayerById.get(session.playerId);
+      const previous = expectsCaptain ? q.getPlayerById.get(expectsCaptain) : null;
+      logAudit({
+        eventId: event.id, role: 'player', operator: player?.username ?? null, action: 'takeover',
+        target: `team:${team.id}`, reason: previous ? `from ${previous.username}` : 'no previous captain'
+      });
       return true;
     })();
 
@@ -263,6 +276,44 @@ export function registerPlayerRoutes(app, { db, q }) {
     }
 
     return { ok: true };
+  });
+
+  // --- team name: the captain sets it until round 1 starts (scope §2) -----
+
+  app.post('/team-name', async (req, reply) => {
+    const session = readSession(req);
+    if (!session || !session.gateOk || !session.playerId) {
+      return reply.code(401).send({ error: 'not_ready' });
+    }
+
+    const ctx = q.resolveSessionContext(session);
+    if (!ctx) return reply.code(401).send({ error: 'event_not_running' });
+    const { event, team } = ctx;
+    if (event.paused) return reply.code(423).send({ error: 'paused' });
+
+    if (team.captain_player_id !== session.playerId) {
+      return reply.code(403).send({ error: 'not_captain' });
+    }
+    // After round 1 starts the name is on the leaderboard; changes go
+    // through Floor, which is logged with an operator.
+    if (q.roundOneStarted(event.id)) {
+      return reply.code(409).send({ error: 'rename_closed' });
+    }
+
+    // Capped at the API, not the input field (CLAUDE.md #2); same cap as Floor.
+    const teamName = String(req.body?.team_name ?? '').trim().slice(0, 32);
+
+    db.transaction(() => {
+      setTeamName.run(teamName || null, team.id);
+      q.bumpTableVersion.run(team.id);
+      const player = q.getPlayerById.get(session.playerId);
+      logAudit({
+        eventId: event.id, role: 'player', operator: player?.username ?? null, action: 'renameTeam',
+        target: `team:${team.id}`, reason: teamName || '(cleared)'
+      });
+    })();
+
+    return { ok: true, team_name: teamName || null };
   });
 
   // --- answer (CLAUDE.md #12) ---------------------------------------------

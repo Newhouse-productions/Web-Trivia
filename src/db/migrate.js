@@ -36,6 +36,9 @@ export function migrate(db) {
   // "final" phase, which is the safe default (scope decision: pre-flight/
   // final host screens are derived from this, not a manual toggle).
   addColumn('events', 'total_rounds', 'INTEGER');
+  // Milliseconds the event spent paused while this question was OPEN —
+  // pause stops the timer (CLAUDE.md #17) without rewriting opened_at.
+  addColumn('questions', 'timer_paused_ms', 'INTEGER NOT NULL DEFAULT 0');
 
   // round/order_no started NOT NULL; practice/reserve questions need them
   // nullable. SQLite can't drop a NOT NULL constraint in place, so rebuild.
